@@ -10,7 +10,7 @@ Die Beispiele verwenden durchgehend Platzhalter:
 | `<ORG>` | GitHub-Organisation der Klasse | `m320-ix25` |
 | `<CLASSROOM>` | Kurzname des Klassenzimmers = Ordner im Config-Repo | `m320-ix25` |
 | `<SLUG>` | Slug einer Aufgabe | `m320-lu04-a4-objektkommunikation` |
-| `<TAG>` | gepinnte pygrader50-Version | `v2.1.0` |
+| `<TAG>` | gepinnte pygrader50-Version | `v2.1.1` |
 
 `<ORG>` und `<CLASSROOM>` sind oft gleich, müssen es aber nicht sein — der
 Kurzname steht in `<CLASSROOM>/classroom.json`.
@@ -45,7 +45,7 @@ Nur nötig, wenn du pygrader50 selbst weiterentwickelst — für ein neues
 Klassenzimmer pinnst du einen bestehenden Tag und überspringst diesen Schritt.
 
 ```bash
-git tag v2.1.0 && git push origin main --tags
+git tag v2.1.1 && git push origin main --tags
 ```
 
 Der Tag ist das, was die Klassenzimmer pinnen. Ohne Tag kein reproduzierbares
@@ -91,7 +91,7 @@ die Datei auf die Pages-Site, wo `runner.py` sie bei jeder Abgabe holt.
 Die Version steht in `bootstrap/autograder.py`:
 
 ```python
-VERSION = 'v2.1.0'
+VERSION = 'v2.1.1'
 ```
 
 Ein Upgrade heisst später: Tag hochziehen, Zeile ändern, `set-default` erneut

@@ -18,7 +18,7 @@ https://github.com/BZZ-Commons/pygrader50
 import subprocess
 import sys
 
-VERSION = 'v2.1.0'
+VERSION = 'v2.1.1'
 PACKAGE = f'pygrader50 @ git+https://github.com/BZZ-Commons/pygrader50@{VERSION}'
 
 
