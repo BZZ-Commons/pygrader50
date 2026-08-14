@@ -11,6 +11,29 @@ ein installierbares Paket mit zwei Einstiegspunkten.
 - **[SETUP.md](SETUP.md)** — Einrichtung von Grund auf, Migration, Fehlersuche
 - **[CLI.md](CLI.md)** — alle Kommandos, Optionen und Umgebungsvariablen
 
+## Ein Klassenzimmer anschliessen
+
+Die Engine ist klassenzimmer-neutral — sie liest Klasse, Aufgabe und Person aus
+der Umgebung, die `runner.py` setzt. Für `m320-ix25` gilt derselbe Ablauf wie
+für jede andere Klasse:
+
+```bash
+gh extension install foundation50/gh-teacher
+gh auth refresh -h github.com -s admin:org,read:org,repo,workflow
+
+gh teacher autograder set-default m320-ix25 m320-ix25 --from bootstrap/autograder.py
+scripts/remove-legacy-classroom-yml.sh m320-ix25 m320-ix25 --apply
+cp classroom50/moodle-sync.yaml <config-repo>/.github/workflows/
+```
+
+Vier Schritte, dazwischen je eine Prüfung — ausführlich in
+[SETUP.md](SETUP.md). Zwei Dinge sind pro Klasse zu entscheiden: welchen Tag
+`bootstrap/autograder.py` pinnt, und ob die Aufgaben-Konfiguration im Studi-Repo
+bleibt oder ins Config-Repo wandert.
+
+Voraussetzung ist ein eingerichtetes Classroom 50 (`gh teacher classroom add`).
+Python-Module beliebig — die Engine kennt nur pytest und pylint, nicht das Modul.
+
 ## Die zwei Einstiegspunkte
 
 ```
@@ -63,6 +86,13 @@ Job: eine Aufgabe ohne hinterlegte Bewertung ist ein Konfigurationsstand, kein
 Infrastrukturfehler.
 
 Vorlage: [`examples/bundle/`](examples/bundle).
+
+Classroom 50 bringt mit `tests.json` auch deklarative Tests mit. pygrader50
+benutzt sie bewusst nicht: `runner.py` löst per-Assignment `tests.json` **vor**
+dem Klassen-Default auf, eine Aufgabe mit deklarativen Tests bekommt also kein
+Linting mehr. Und im deklarativen Pfad wäre entweder die proportionale
+Lint-Note oder der grüne Commit-Status zu haben, nie beides. Beides pro Aufgabe
+mischen geht nicht — beides pro Klasse schon.
 
 ## Bewertung
 

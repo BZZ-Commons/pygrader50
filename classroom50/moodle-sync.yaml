@@ -8,6 +8,11 @@ name: Moodle Sync
 # ihn jede*r Studierende mit einem eigenen Workflow auslesen und damit beliebige
 # Noten setzen.
 #
+# Die Datei ist klassenzimmer-neutral: bleibt die Eingabe "classroom" leer,
+# werden alle Klassenzimmer-Ordner des Config-Repos übertragen (jeder Ordner mit
+# einer scores.json). Ein Config-Repo mit mehreren Klassen braucht also keine
+# zweite Kopie dieses Workflows.
+#
 # Secrets/Variablen im classroom50-Repo:
 #   secrets.MOODLE_TOKEN   Webservice-Token
 #   vars.MOODLE_URL        Basis-URL der Moodle-Instanz
@@ -17,9 +22,8 @@ on:
   workflow_dispatch:
     inputs:
       classroom:
-        description: "Klassenzimmer (Ordner im Config-Repo)"
-        required: true
-        default: "m323-ix24"
+        description: "Klassenzimmer (Ordner im Config-Repo); leer = alle"
+        required: false
       assignment:
         description: "Nur dieses Assignment (leer = alle)"
         required: false
@@ -55,6 +59,8 @@ jobs:
         with:
           python-version: "3.14"
 
+      # Auf denselben Tag pinnen wie bootstrap/autograder.py, damit Bewertung
+      # und Übertrag aus derselben Version stammen.
       - name: Install pygrader50
         run: pip install "pygrader50 @ git+https://github.com/BZZ-Commons/pygrader50@v2.0.0"
 
@@ -65,21 +71,44 @@ jobs:
           MOODLE_FUNCTION: ${{ vars.MOODLE_FUNCTION }}
           # Liest die Release-Bodies der Studi-Repos für den Feedback-Text.
           GH_TOKEN: ${{ secrets.CLASSROOM50_SERVICE_TOKEN }}
-          CLASSROOM: ${{ github.event.inputs.classroom || 'm323-ix24' }}
+          CLASSROOM: ${{ github.event.inputs.classroom }}
           ASSIGNMENT: ${{ github.event.inputs.assignment }}
           USER_FILTER: ${{ github.event.inputs.user }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
           FORCE: ${{ github.event.inputs.force }}
         run: |
-          set -euo pipefail
-          # Bewusst if-Blöcke statt `[ … ] && ARGS+=…`: unter `set -e` würde ein
-          # fehlschlagender letzter Test den Step rot färben.
-          ARGS=("$CLASSROOM/scores.json" "--state" "$CLASSROOM/moodle-state.json")
-          if [ -n "${ASSIGNMENT:-}" ];  then ARGS+=("--assignment" "$ASSIGNMENT"); fi
-          if [ -n "${USER_FILTER:-}" ]; then ARGS+=("--user" "$USER_FILTER"); fi
-          if [ "${DRY_RUN:-false}" = "true" ]; then ARGS+=("--dry-run"); fi
-          if [ "${FORCE:-false}" = "true" ];   then ARGS+=("--force"); fi
-          python -m pygrader50.moodle "${ARGS[@]}"
+          # Kein `set -e`: ein gescheitertes Klassenzimmer soll die übrigen nicht
+          # verhindern. Der Exit-Code wird am Ende zusammengefasst.
+          set -uo pipefail
+
+          if [ -n "${CLASSROOM:-}" ]; then
+            CLASSROOMS="$CLASSROOM"
+          else
+            # Jeder Ordner der obersten Ebene mit einer scores.json ist ein
+            # Klassenzimmer. Ohne Treffer hat "Collect Scores" noch nie gelaufen.
+            CLASSROOMS=$(find . -mindepth 2 -maxdepth 2 -name scores.json -not -path './.*' \
+                         | sed 's|^\./||; s|/scores\.json$||' | sort)
+          fi
+
+          if [ -z "$CLASSROOMS" ]; then
+            echo "::error::keine scores.json gefunden — lief Collect Scores schon?"
+            exit 1
+          fi
+
+          rc=0
+          for room in $CLASSROOMS; do
+            echo "::group::$room"
+            # Bewusst if-Blöcke statt `[ … ] && ARGS+=…`: unter `set -e` würde ein
+            # fehlschlagender letzter Test den Step rot färben.
+            ARGS=("$room/scores.json" "--state" "$room/moodle-state.json")
+            if [ -n "${ASSIGNMENT:-}" ];  then ARGS+=("--assignment" "$ASSIGNMENT"); fi
+            if [ -n "${USER_FILTER:-}" ]; then ARGS+=("--user" "$USER_FILTER"); fi
+            if [ "${DRY_RUN:-false}" = "true" ]; then ARGS+=("--dry-run"); fi
+            if [ "${FORCE:-false}" = "true" ];   then ARGS+=("--force"); fi
+            python -m pygrader50.moodle "${ARGS[@]}" || rc=1
+            echo "::endgroup::"
+          done
+          exit $rc
 
       - name: Zustand committen
         # always(): auch wenn einzelne Übertragungen scheiterten, sollen die

@@ -1,6 +1,10 @@
 # CLI-Referenz
 
-Zwei Kommandos: eines bewertet, eines überträgt.
+Zwei Kommandos: eines bewertet, eines überträgt. Dazu ein Migrationsskript.
+
+Die Beispiele nutzen `<CLASSROOM>` und `<SLUG>` als Platzhalter — die Kommandos
+sind klassenzimmer-neutral, es steckt nirgends ein Modul- oder Klassenname im
+Code.
 
 ---
 
@@ -49,13 +53,17 @@ Log, Exit 0.
 
 ```bash
 cd /pfad/zum/studi-repo
-CLASSROOM=m323-ix24 \
-ASSIGNMENT=m323-lu01-a02-imperativer-ggt \
+CLASSROOM=m320-ix25 \
+ASSIGNMENT=m320-lu04-a4-objektkommunikation \
 SUBMISSION_TAG=submit/2026-08-13T12-00-00Z-abc1234 \
-OWNER=graphics80 \
+OWNER=anna \
 python -m pygrader50
 cat release-body.md
 ```
+
+Ohne `RUNNER_TEMP` entfällt die Bundle-Suche, es zählt also
+`.github/autograding/` im Checkout. Einen anderen Ort erzwingt
+`PYGRADER50_CONFIG_DIR`.
 
 ---
 
@@ -74,11 +82,15 @@ python -m pygrader50.moodle SCORES [Optionen]
 |---|---|
 | `SCORES` | Pfad zu `<classroom>/scores.json` (Pflicht) |
 | `--assignment SLUG` | nur diese Aufgabe |
-| `--user LOGIN` | nur diesen GitHub-Login |
+| `--user LOGIN` | nur diesen GitHub-Login ¹ |
 | `--state PFAD` | Zustandsfile; ohne Angabe wird jedes Mal alles übertragen |
 | `--force` | auch Unverändertes erneut senden |
 | `--dry-run` | nur anzeigen, nichts senden; funktioniert ohne Zugangsdaten |
 | `--no-feedback` | ohne Feedback-Text (spart einen API-Aufruf pro Abgabe) |
+
+¹ Muss im Moodle-Kurs eingeschrieben sein. Der eigene Lehrer-Account ist es
+meist nicht — Moodle antwortet dann `No matching assignment found`, obwohl die
+Aktivität existiert.
 
 ### Umgebung
 
@@ -133,22 +145,63 @@ Ein Fehler bricht den Lauf **nicht** ab: die übrigen Abgaben gehen trotzdem rau
 
 ```bash
 # Trockenlauf über alles, ohne Zugangsdaten
-python -m pygrader50.moodle m323-ix24/scores.json --dry-run --no-feedback
+python -m pygrader50.moodle <CLASSROOM>/scores.json --dry-run --no-feedback
 
 # Eine einzelne Person nachtragen
-python -m pygrader50.moodle m323-ix24/scores.json --user graphics80
+python -m pygrader50.moodle <CLASSROOM>/scores.json --user anna
 
 # Eine Aufgabe nach einer Nachbewertung komplett neu schicken
-python -m pygrader50.moodle m323-ix24/scores.json \
-  --assignment m323-lu01-a02-imperativer-ggt --force
+python -m pygrader50.moodle <CLASSROOM>/scores.json \
+  --assignment <SLUG> --force
 
 # Wie der Nachtlauf
-python -m pygrader50.moodle m323-ix24/scores.json --state m323-ix24/moodle-state.json
+python -m pygrader50.moodle <CLASSROOM>/scores.json \
+  --state <CLASSROOM>/moodle-state.json
+```
+
+Ohne lokalen Klon des Config-Repos reicht die Datei allein:
+
+```bash
+gh api repos/<ORG>/classroom50/contents/<CLASSROOM>/scores.json \
+   -H 'Accept: application/vnd.github.raw' > scores.json
+GH_TOKEN=$(gh auth token) python -m pygrader50.moodle scores.json --dry-run
 ```
 
 ### Manuell auslösen
 
 Im classroom50-Repo unter **Actions → Moodle Sync → Run workflow**: Klassenzimmer,
-optional Aufgabe und Login, dazu die Schalter `dry_run` und `force`. Der Workflow
+optional Aufgabe und Login, dazu die Schalter `dry_run` und `force`. Bleibt das
+Klassenzimmer leer, laufen alle Ordner mit einer `scores.json`. Der Workflow
 liegt hier als [`classroom50/moodle-sync.yaml`](classroom50/moodle-sync.yaml),
 Einbau siehe [SETUP.md](SETUP.md).
+
+Oder von der Kommandozeile:
+
+```bash
+gh workflow run moodle-sync.yaml --repo <ORG>/classroom50 \
+  -f classroom=<CLASSROOM> -f dry_run=true
+```
+
+---
+
+## `scripts/remove-legacy-classroom-yml.sh` — migrieren
+
+Entfernt den alten GitHub-Classroom-Workflow aus den Template-Repos einer
+migrierten Klasse und aus den bereits angenommenen Studi-Repos.
+
+```
+scripts/remove-legacy-classroom-yml.sh <ORG> <CLASSROOM> [--apply]
+```
+
+| Aufruf | Wirkung |
+|---|---|
+| ohne `--apply` | Trockenlauf, listet jedes Ziel als `would rm` oder `absent` |
+| mit `--apply` | löscht `.github/workflows/classroom.yml`, ein Commit pro Repo |
+
+Die Zielliste kommt aus dem `template`-Block von
+`<CLASSROOM>/assignments.json`, **nicht** aus dem Repo-Listing der
+Template-Organisation — dort liegen auch Templates von Modulen, die noch auf dem
+alten Pfad laufen. Wiederholbar; fehlende Dateien sind `absent`, kein Fehler.
+Exit 1, sobald ein Repo scheitert.
+
+Hintergrund und die nötige Token-Rotation: [SETUP.md](SETUP.md), Schritt 4.
