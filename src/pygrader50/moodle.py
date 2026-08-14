@@ -308,7 +308,12 @@ def main(argv: list[str] | None = None) -> int:
 
     base_url = os.environ.get('MOODLE_URL', '').strip()
     token = os.environ.get('MOODLE_TOKEN', '').strip()
-    function = os.environ.get('MOODLE_FUNCTION', DEFAULT_FUNCTION).strip()
+    # `or DEFAULT_FUNCTION`, nicht der Vorgabewert von .get(): GitHub Actions
+    # setzt `MOODLE_FUNCTION: ${{ vars.MOODLE_FUNCTION }}` auch dann, wenn die
+    # Variable nicht existiert — dann steht dort der leere String und .get()
+    # liefert ihn statt der Vorgabe. Moodle antwortet auf ein leeres
+    # `wsfunction` mit `invalidparameter` / "Missing function name".
+    function = os.environ.get('MOODLE_FUNCTION', '').strip() or DEFAULT_FUNCTION
     if not args.dry_run and not (base_url and token):
         print('::error::MOODLE_URL und MOODLE_TOKEN müssen gesetzt sein', file=sys.stderr)
         return 1

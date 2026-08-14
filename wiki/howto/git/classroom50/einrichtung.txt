@@ -7,7 +7,7 @@ Klassenzimmer. Reihenfolge einhalten; jeder Schritt ist einzeln prüfbar.
 | ''<ORG>'' | GitHub-Organisation der Klasse | ''m320-ix25'' |
 | ''<CLASSROOM>'' | Kurzname des Klassenzimmers = Ordner im Config-Repo | ''m320-ix25'' |
 | ''<SLUG>'' | Slug einer Aufgabe | ''m320-lu04-a4-objektkommunikation'' |
-| ''<TAG>'' | gepinnte pygrader50-Version | ''v2.1.1'' |
+| ''<TAG>'' | gepinnte pygrader50-Version | ''v2.1.2'' |
 
 ''<ORG>'' und ''<CLASSROOM>'' sind oft gleich, müssen es aber nicht sein — der
 Kurzname steht in ''<CLASSROOM>/classroom.json''.
@@ -34,7 +34,7 @@ Nur nötig, wenn pygrader50 selbst weiterentwickelt wird — für ein neues
 Klassenzimmer pinnt man einen bestehenden Tag und überspringt diesen Schritt.
 
 <code bash>
-git tag v2.1.1 && git push origin main --tags
+git tag v2.1.2 && git push origin main --tags
 </code>
 
 Der Tag ist das, was die Klassenzimmer pinnen. Ohne Tag kein reproduzierbares
@@ -73,7 +73,7 @@ stellt die Datei auf die Pages-Site, wo ''runner.py'' sie bei jeder Abgabe holt.
 Die gepinnte Version steht in ''bootstrap/autograder.py'':
 
 <code python>
-VERSION = 'v2.1.1'
+VERSION = 'v2.1.2'
 </code>
 
 Ein Upgrade heisst später: Tag hochziehen, Zeile ändern, ''set-default'' erneut

@@ -220,6 +220,37 @@ def test_endpoint_url():
     assert 'wstoken=abc123' in url and 'wsfunction=fn' in url
 
 
+def test_cli_falls_back_to_the_default_function_when_the_variable_is_empty(
+    tmp_path, monkeypatch
+):
+    """An empty MOODLE_FUNCTION must not produce an empty `wsfunction`.
+
+    GitHub Actions sets `MOODLE_FUNCTION: ${{ vars.MOODLE_FUNCTION }}` even when
+    the variable does not exist, so the name is present but blank — the default
+    of os.environ.get never applies. Moodle answers a blank wsfunction with
+    `invalidparameter` / "Missing function name", and only on a real transfer:
+    a dry run never builds the endpoint, so this stays invisible until the first
+    live run.
+    """
+    path = tmp_path / 'scores.json'
+    path.write_text(json.dumps(scores(submission())), encoding='UTF-8')
+    monkeypatch.setenv('MOODLE_URL', 'https://moodle.example.org')
+    monkeypatch.setenv('MOODLE_TOKEN', 'abc123')
+    monkeypatch.setenv('MOODLE_FUNCTION', '')
+
+    seen = {}
+
+    def fake_post(endpoint, payload, timeout=30):  # pylint: disable=unused-argument
+        seen['endpoint'] = endpoint
+        return True, 'ok'
+
+    monkeypatch.setattr(moodle, 'post', fake_post)
+    monkeypatch.setattr(moodle, 'release_feedback', lambda submission, token: '')
+
+    assert moodle.main([str(path), '--state', str(tmp_path / 'state.json')]) == 0
+    assert f'wsfunction={moodle.DEFAULT_FUNCTION}' in seen['endpoint']
+
+
 def test_cli_requires_credentials(tmp_path, monkeypatch, capsys):
     path = tmp_path / 'scores.json'
     path.write_text(json.dumps(scores(submission())), encoding='UTF-8')
