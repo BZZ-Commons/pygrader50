@@ -205,3 +205,28 @@ alten Pfad laufen. Wiederholbar; fehlende Dateien sind `absent`, kein Fehler.
 Exit 1, sobald ein Repo scheitert.
 
 Hintergrund und die nötige Token-Rotation: [SETUP.md](SETUP.md), Schritt 4.
+
+---
+
+## `scripts/sync-template-pins.py` — Pins aktualisieren
+
+Hebt die Werkzeug-Versionen in den Template-Repos einer Klasse und legt
+`.python-version` an.
+
+```
+scripts/sync-template-pins.py <ORG> <CLASSROOM> [--apply]
+```
+
+| Was | Verhalten |
+|---|---|
+| `pylint`, `pytest` | werden überall gesetzt, fehlende Zeilen angehängt |
+| `httpx`, `pytest-asyncio` | nur dort gehoben, wo sie schon stehen |
+| alles andere | bleibt Zeile für Zeile erhalten, inkl. Kommentaren |
+| `.python-version` | wird auf die konfigurierte Version gesetzt |
+
+Die Versionen stehen als Block am Kopf des Skripts. Wiederholbar: ein bereits
+aktuelles Template meldet `ok`.
+
+`pytest-asyncio` muss mit `pytest` mitziehen — 0.23.8 und pytest 9 lassen sich
+nicht gemeinsam auflösen. Pakete, die die Studierenden selbst eintragen sollen,
+gehören nicht in die Pin-Liste.

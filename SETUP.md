@@ -161,9 +161,24 @@ Beim Löschen von `classroom.yml` geht also keine Funktion verloren.
 der Fallback, solange Schritt 3 nicht für alle Aufgaben erledigt ist. Erst wenn
 jede Aufgabe ein Bundle im Config-Repo hat, kann der Ordner verschwinden.
 
-`requirements.txt` und Hilfsskripte wie `_run_pylint.py` stören nicht, werden
-aber auch nicht mehr benutzt: pygrader50 installiert die Studi-`requirements.txt`
-bewusst nicht.
+`requirements.txt` und Hilfsskripte wie `_run_pylint.py` stören die Bewertung
+nicht — pygrader50 installiert die Studi-`requirements.txt` bewusst nicht. Für
+die lokale Arbeit der Studierenden zählt sie trotzdem, deshalb hält sie ein
+eigenes Skript aktuell:
+
+```bash
+scripts/sync-template-pins.py <ORG> <CLASSROOM>            # Trockenlauf
+scripts/sync-template-pins.py <ORG> <CLASSROOM> --apply    # schreiben
+```
+
+Es hebt die Werkzeug-Pins (`pylint`, `pytest`, und wo vorhanden `httpx` /
+`pytest-asyncio`) und legt `.python-version` an. Alles andere bleibt
+unangetastet — Pakete, die die Studierenden im Rahmen der Aufgabe selbst
+eintragen sollen (Flask in den lu06-Aufgaben), gehören nicht hinein.
+
+Die Versionen stehen als Block am Kopf des Skripts und werden einmal pro
+Semester angefasst. `pytest-asyncio` muss dabei mit `pytest` mitziehen: 0.23.8
+und pytest 9 sind ein `ResolutionImpossible`.
 
 ### 4.3 Die Zielliste richtig bilden
 
