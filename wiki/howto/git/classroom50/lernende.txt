@@ -1,0 +1,109 @@
+====== Classroom 50: Aufgabe annehmen, bearbeiten, abgeben ======
+
+Diese Seite gilt für alle Module, die auf **Classroom 50** laufen. Der alte
+Ablauf über GitHub Classroom steht unter
+[[howto:git:start|Github Classroom (veraltet)]].
+
+===== Voraussetzungen =====
+
+  - Ein GitHub-Konto, verknüpft mit der BZZ — siehe [[howto:git:githubkonto|]] und [[howto:git:githubsso|]].
+  - Dein **Moodle-Benutzername muss deinem GitHub-Login entsprechen**. Ist das nicht der Fall, wird deine Abgabe zwar bewertet, die Note kommt aber nicht in Moodle an. Melde dich in dem Fall bei der Lehrperson.
+
+<WRAP center round important 90%>
+Neu gegenüber GitHub Classroom: Der GitHub-Benutzername wird **nicht mehr** im
+Moodle-Profil eingetragen (weder unter //Pseudonym// noch unter
+//GitHub Classroom//). Classroom 50 vergleicht direkt Moodle-Benutzername und
+GitHub-Login.
+</WRAP>
+
+===== 1. Aufgabe annehmen =====
+
+  - Öffne in Moodle die Aktivität der Aufgabe (Typ //External Assignment//).
+  - Klicke den dort hinterlegten Link zum Annehmen der Aufgabe.
+  - GitHub erstellt dir ein privates Repository ''<CLASSROOM>-<SLUG>-<DEIN-LOGIN>'' in der Organisation der Klasse.
+
+Das Repository enthält den Startcode aus dem Template. Die Tests der Lehrperson
+sind bereits hinterlegt.
+
+===== 2. Repository klonen und einrichten =====
+
+<code bash>
+git clone https://github.com/<ORG>/<CLASSROOM>-<SLUG>-<DEIN-LOGIN>.git
+cd <CLASSROOM>-<SLUG>-<DEIN-LOGIN>
+</code>
+
+Danach eine virtuelle Umgebung anlegen und die Abhängigkeiten installieren —
+der Ablauf ist unverändert, siehe [[howto:git:venv|]] und
+[[howto:git:python_venv|]].
+
+<code bash>
+python3 -m venv .venv
+source .venv/bin/activate       # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+</code>
+
+<WRAP center round tip 90%>
+Die ''requirements.txt'' ist für **deine** lokale Arbeit da. Die Bewertung auf
+GitHub benutzt sie bewusst nicht, sondern eigene, festgelegte Versionen. Deshalb
+kann es vorkommen, dass pylint auf GitHub etwas strenger urteilt als bei dir
+lokal.
+</WRAP>
+
+===== 3. Bearbeiten und abgeben =====
+
+Abgeben heisst: **pushen**. Es gibt keinen separaten Abgabeknopf.
+
+<code bash>
+git add .
+git commit -m "Aufgabe gelöst"
+git push
+</code>
+
+Jeder Push löst eine neue Bewertung aus. Du kannst beliebig oft pushen; gewertet
+wird die **letzte** Abgabe vor dem Abgabetermin.
+
+===== 4. Resultat anschauen =====
+
+Nach ein bis zwei Minuten stehen im Repository vier Dinge:
+
+^ Ort ^ Was du dort siehst ^
+| Häkchen / Kreuz neben dem Commit | Kurzfassung, z.B. ''classroom50/autograde: 5/7 (2/3 tests passed)'' |
+| Reiter **Actions** | das vollständige Log des Bewertungslaufs |
+| Reiter **Releases** | ein Release pro Abgabe mit der Feedback-Tabelle |
+| Pull Request //Feedback// | dasselbe Feedback als Kommentar |
+
+Die Feedback-Tabelle sieht so aus:
+
+<code>
+### classroom50 autograde: 5/7
+
+## Unittests
+| name     | feedback        | expected | actual | points | max |
+| -------- | --------------- | -------- | ------ | ------ | --- |
+| test_ggt | Assertion Error | 8        | None   | 0      | 2   |
+
+**0.00/2.00 Points (0.00%)**
+</code>
+
+  * **expected** ist der von den Tests erwartete Wert, **actual** dein tatsächlicher.
+  * Ein Eintrag **Linting** bewertet den Stil deines Codes. Punkte gibt es anteilig zur pylint-Note.
+  * Ein rotes Kreuz beim Commit heisst: mindestens ein Test ist gescheitert **oder** das Linting gab 0 Punkte.
+
+===== 5. Note in Moodle =====
+
+Die Punkte werden **nachts** nach Moodle übertragen, ungefähr um 05:00 Uhr.
+Wenn du am Abend pushst, steht die Note am nächsten Morgen in Moodle. Braucht
+die Lehrperson die Noten früher, kann sie den Übertrag von Hand auslösen.
+
+Verspätete Abgaben werden übertragen und im Feedback als solche gekennzeichnet.
+
+===== Häufige Fragen =====
+
+^ Frage ^ Antwort ^
+| Ich sehe ''0/0'' statt Punkten. | Für diese Aufgabe ist (noch) keine Bewertung hinterlegt. Kein Fehler deinerseits — der Lehrperson melden. |
+| Das Häkchen ist rot, obwohl alle Tests grün sind. | Dann kostet das Linting die Punkte. Schau in die Zeile ''Linting'' im Release. |
+| Es läuft gar kein Bewertungslauf. | Enthält deine Commit-Message ''NOACTION'' oder ''CLASSROOM 50'', wird der Lauf absichtlich übersprungen. Sonst: Reiter **Actions** prüfen. |
+| Ich habe nach dem Abgabetermin gepusht. | Die Abgabe wird trotzdem bewertet und als verspätet markiert. |
+| Meine Note fehlt in Moodle. | Meist stimmt Moodle-Benutzername ≠ GitHub-Login. Der Lehrperson melden. |
+
+Mehr: [[.:troubleshooting|Problembehandlung]].

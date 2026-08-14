@@ -1,0 +1,76 @@
+====== Anleitungen git (GitHub, Classroom 50) ======
+
+Seit August 2026 läuft die automatisierte Bewertung an der BZZ über
+**Classroom 50**. GitHub Classroom und der alte Autograder ''BZZ-Commons/pygrader''
+sind abgelöst — die Seiten dazu bleiben nur noch als Archiv stehen.
+
+===== Ersteinrichtung =====
+  * [[.:githubkonto|]]
+  * [[.:githubsso|]]
+  * [[.:github_moodle]]
+
+===== Classroom 50 =====
+
+  * [[.:classroom50:start|Überblick: wie Classroom 50 an der BZZ läuft]]
+
+==== Für Lernende ====
+  * [[.:classroom50:lernende|Aufgabe annehmen, bearbeiten, abgeben]]
+  * [[.:classroom50:troubleshooting|Problembehandlung]]
+
+==== Für Lehrpersonen ====
+  * [[.:classroom50:lehrpersonen|Klassenzimmer und Aufgaben verwalten]]
+  * [[.:classroom50repo|Das classroom50-Konfigurations-Repository]]
+  * [[.:template|Template-Repositories]]
+  * [[.:classroom50:bewertung|Wie bewertet wird (pytest + pylint)]]
+  * [[.:classroom50:moodle|Noten nach Moodle übertragen]]
+
+==== Einrichtung und Betrieb ====
+  * [[.:classroom50:einrichtung|Ein Klassenzimmer von Grund auf einrichten]]
+  * [[.:classroom50:migration|Migration von GitHub Classroom]]
+  * [[.:classroom50:cli|CLI-Referenz]]
+
+===== Best practice und Problembehandlung =====
+  * [[.:organisation|]]
+  * [[.:python_venv|]]
+  * [[.:probleme|]]
+  * [[howto/pycharm/template]]
+
+===== Github Classroom (veraltet) =====
+
+<WRAP center round important 90%>
+Diese Seiten beschreiben den **abgelösten** Ablauf. Sie gelten nur noch für
+Module, die noch nicht auf Classroom 50 migriert sind (Stand August 2026 u.a.
+Teile von m320 und m450). Für alles andere gilt
+[[.:classroom50:start|Classroom 50]].
+</WRAP>
+
+==== Workflow für Lernende ====
+  - [[.:githubkonto]]
+  - [[.:assignment]]
+  - [[.:clonestart]]
+  - [[.:clonesetup]]
+  - [[.:venv]]
+  - [[.:kontrolle_venv]]
+  - [[.:kontrolle_requirements]]
+
+==== Troubleshooting für Lernende ====
+  - [[.:troubleshooting]]
+  - [[.:github_authentifikation]]
+  - [[.:venv_manuell]]
+  - [[.:venv_aktivieren]]
+  - [[.:pyhton_interpreter]]
+
+==== Diverses ====
+  * [[.:classroom|]]
+  * [[.:assignment|]]
+  * [[.:ersteaufgabe|]]
+
+==== Alte Bewertungs-Varianten ====
+  * [[.:grading/automatic_grading|Automatisierte Bewertung ab August 2024 (pygrader, GitHub Classroom)]]
+  * [[.:grading/autograding2|Bewertung vom Autograding in Moodle]]
+  * [[.:grading/linter|Erfolgreichen Linter-Run in Moodle übernehmen]]
+  * [[.:grading/autograding|]]
+
+===== Inhaltsverzeichnis (ungeordnet) =====
+
+<nspages . -subns -h1  -exclude -simpleList -textPages="Inhaltsverzeichnis">

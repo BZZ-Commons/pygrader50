@@ -1,0 +1,56 @@
+====== Classroom 50: Problembehandlung ======
+
+===== Für Lernende =====
+
+^ Symptom ^ Ursache / Abhilfe ^
+| Es startet kein Bewertungslauf | Enthält die Commit-Message ''NOACTION'' oder ''CLASSROOM 50'', wird absichtlich übersprungen. Sonst im Reiter **Actions** nachsehen. |
+| Release zeigt ''0/0'' | Für diese Aufgabe ist keine Bewertung hinterlegt. Kein Fehler auf deiner Seite — der Lehrperson melden. |
+| Rotes Kreuz, aber alle Tests grün | Das Linting gab 0 Punkte. Zeile ''Linting'' im Release ansehen. |
+| pylint meckert auf GitHub mehr als lokal | Die Bewertung benutzt eigene, neuere Versionen (pylint 4.x) statt deiner ''requirements.txt''. |
+| Ein Test bricht mit Timeout ab | Endlosschleife oder wartende Eingabe (''input()'') im Code. Jeder Testfall hat ein eigenes Zeitlimit. |
+| Note fehlt in Moodle | Übertrag läuft nachts. Fehlt sie am Folgetag: meist Moodle-Benutzername ≠ GitHub-Login → Lehrperson. |
+
+Zu Git, venv und PyCharm siehe [[howto:git:probleme|]] und
+[[howto:git:python_venv|]].
+
+===== Für Lehrpersonen =====
+
+==== Einrichtung und Bewertung ====
+
+^ Symptom ^ Ursache ^
+| ''gh teacher …'': ''missing scopes'' | ''gh auth refresh -h github.com -s admin:org,read:org,repo,workflow'' in einem **interaktiven** Terminal |
+| Release zeigt ''0/0'', ''tests: []'' | Kein Autograder aktiv — Klassen-Default fehlt, oder ''publish-pages'' lief noch nicht |
+| Pages liefert 404 für ''autograder.py'' | Klassen-Segment vergessen: ''…/classroom50/<CLASSROOM>/autograder.py'' |
+| Log: ''no grading configuration found'' | Weder Bundle noch ''.github/autograding/'' enthält ''unittests.json'' / ''lint.json'' |
+| Commit-Status ''error'', kein Release | Exit ≠ 0: ''pip install'' gescheitert (Netz, falscher Tag) oder Absturz — Traceback steht im Job-Log |
+| Bundle wird ignoriert | Ordner enthält ''autograder.py'' oder ''tests.json'', oder ''publish-pages'' lief nach dem Push nicht |
+| Aufgabe hat plötzlich kein Linting mehr | Eine ''tests.json'' für diese Aufgabe verdrängt den Klassen-Default |
+| Lint-Punkte weichen von früher ab | Auf Python 3.14 installiert sich pylint 4.x statt 3.2.7 — strengere Prüfungen |
+| Lint gibt 0 Punkte | Bei wenigen Statements und einem ''E…'' wird die pylint-Note negativ und auf 0 geklemmt — korrekt, kein Defekt |
+| Zwei Bewertungsläufe pro Push | Die alte ''classroom.yml'' liegt noch im Repo, siehe [[.:migration|Migration]] |
+
+==== Einsammeln und Moodle ====
+
+^ Symptom ^ Ursache ^
+| ''collect-scores'' rot, Punkte trotzdem da | ''CLASSROOM50_SERVICE_TOKEN'' ohne //Administration: Read and write// → ''gh teacher rotate-service-token <ORG>'' |
+| ''gh teacher roster …'' scheitert, Namen leer | Klassenzimmer hat noch ''students.csv'' statt ''roster.csv'' |
+| Moodle: ''No matching assignment found'' | Aktivitätsname **oder** Kursmitgliedschaft passt nicht. Nicht mit dem Lehrer-Account testen. |
+| Moodle: ''keine XML-Antwort erhalten'' | Falsche ''MOODLE_URL'' oder ungültiger Token — Moodle liefert eine Login-Seite |
+| Noten kommen nicht an, Log sagt „unverändert" | Zustandsfile hält sie für erledigt — mit ''force'' erneut auslösen |
+| Moodle-Sync jede Nacht rot, immer dieselbe Person | Karteileichen-Eintrag in ''scores.json'' — Eintrag von Hand entfernen |
+| Eine Lehrperson taucht in ''scores.json'' auf | Eingesammelt wird nach Teams, nicht nach Roster. Testrepo löschen **und** Eintrag entfernen. |
+
+===== Wo nachschauen =====
+
+  * **Ein Lauf** — Studi-Repo → Actions → der Bewertungsjob. Dort steht, welche Konfigurationsdateien gefunden wurden.
+  * **Eine Klasse** — ''<CLASSROOM>/scores.json'' im Config-Repo.
+  * **Der Übertrag** — Config-Repo → Actions → Moodle Sync.
+
+<code bash>
+# Was hat der letzte Sammellauf geschrieben?
+gh api repos/<ORG>/classroom50/contents/<CLASSROOM>/scores.json \
+   -H 'Accept: application/vnd.github.raw' | jq '.'
+
+# Übertrag trocken nachspielen
+GH_TOKEN=$(gh auth token) python -m pygrader50.moodle scores.json --dry-run
+</code>

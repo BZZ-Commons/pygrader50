@@ -1,0 +1,87 @@
+====== Template-Repositories ======
+
+Ein **Template-Repository** enthält den Startcode einer Aufgabe. Classroom 50
+kopiert es beim Annehmen in ein privates Repository der lernenden Person. Die
+Python-Templates der BZZ liegen in der Organisation ''templates-python''.
+
+===== Aufbau =====
+
+<code>
+<SLUG>/
+├── .github/
+│   └── autograding/          ← Bewertungs-Konfiguration (Fallback)
+│       ├── unittests.json
+│       ├── lint.json
+│       └── pylintrc
+├── tests/                    ← die Tests der Lehrperson
+│   └── test_*.py
+├── main.py                   ← Startcode / Stub
+├── requirements.txt          ← für die lokale Arbeit der Lernenden
+└── README.md                 ← Aufgabenstellung
+</code>
+
+<WRAP center round important 90%>
+**Kein ''.github/workflows/classroom.yml''.** Der Bewertungs-Workflow kommt
+unter Classroom 50 zentral aus dem Config-Repo. Bleibt die alte Datei liegen,
+laufen bei jedem Push zwei Autograder nebeneinander — siehe
+[[.:classroom50:migration|Migration]].
+</WRAP>
+
+===== Namensregeln =====
+
+Der Repository-Name ist der **Slug** der Aufgabe. Er wird an drei Stellen
+identisch verwendet:
+
+  - Name des Template-Repos
+  - ''slug'' in ''<CLASSROOM>/assignments.json''
+  - Name der Aktivität //External Assignment// in Moodle
+
+Kleinbuchstaben, Bindestriche als Trenner, Modul und Lerneinheit voran:
+
+<code>
+m323-lu01-a02-imperativer-ggt
+m320-lu04-a4-objektkommunikation
+</code>
+
+<WRAP center round tip 90%>
+Gegenüber GitHub Classroom entfällt die alte Einschränkung, dass der Name keine
+Bindestriche enthalten darf. Classroom 50 arbeitet durchgehend mit Slugs.
+</WRAP>
+
+===== Neues Template anlegen =====
+
+  - Repository in ''templates-python'' erstellen und unter **Settings → Template repository** als Template markieren.
+  - Startcode, Tests und ''README.md'' mit der Aufgabenstellung einfügen.
+  - ''.github/autograding/'' mit ''unittests.json'', ''lint.json'' und ''pylintrc'' anlegen — Aufbau siehe [[.:classroom50:bewertung|Wie bewertet wird]].
+  - Aufgabe in ''<CLASSROOM>/assignments.json'' des Config-Repos eintragen, mit ''"autograder": "default"'' und ohne ''tests''-Block.
+  - In Moodle eine Aktivität //External Assignment// mit demselben Slug anlegen, siehe [[.:classroom50:moodle|]].
+
+===== requirements.txt =====
+
+Die Datei ist für die **lokale** Arbeit der Lernenden da. Die Bewertung auf
+GitHub installiert sie bewusst nicht: pygrader50 bringt eigene, gepinnte
+Abhängigkeiten mit, damit die Bewertung reproduzierbar bleibt.
+
+Die alten Pins ''pytest==8.3.3'' und ''pylint==3.2.7'' sind auf Python 3.14
+nicht mehr lauffähig. Wer die Datei pflegt, sollte sie deshalb auf aktuelle
+Versionen heben — sonst weicht die lokale Umgebung der Lernenden von der
+Bewertung ab.
+
+===== Änderungen an einem Template =====
+
+<WRAP center round important 90%>
+**Template-Änderungen erreichen bestehende Repositories nicht.** Ein Studi-Repo
+trägt seine Kopie aus dem Moment der Annahme. Eine korrigierte ''unittests.json''
+muss also entweder in die bereits angenommenen Repos nachgezogen werden — oder,
+besser, als Bundle ins Config-Repo wandern, wo sie sofort für alle gilt.
+</WRAP>
+
+Das ist das stärkste Argument für die Bundles unter
+''<CLASSROOM>/autograders/<SLUG>/'': Eine Korrektur dort wirkt beim nächsten
+Push für die ganze Klasse.
+
+===== Weiter =====
+
+  * [[.:classroom50repo|Das classroom50-Repository]]
+  * [[.:classroom50:bewertung|Wie bewertet wird]]
+  * [[howto:pycharm:template|PyCharm-Template]]
