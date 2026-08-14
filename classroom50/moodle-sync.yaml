@@ -1,0 +1,97 @@
+name: Moodle Sync
+
+# Gehört ins classroom50-Config-Repo (.github/workflows/moodle-sync.yaml).
+# Überträgt die in scores.json gesammelten Punkte nach Moodle — manuell per
+# Knopfdruck oder nachts, nachdem "Collect Scores" gelaufen ist.
+#
+# Der Moodle-Token liegt bewusst HIER und nicht in den Studi-Repos: dort könnte
+# ihn jede*r Studierende mit einem eigenen Workflow auslesen und damit beliebige
+# Noten setzen.
+#
+# Secrets/Variablen im classroom50-Repo:
+#   secrets.MOODLE_TOKEN   Webservice-Token
+#   vars.MOODLE_URL        Basis-URL der Moodle-Instanz
+#   vars.MOODLE_FUNCTION   optional, Vorgabe mod_externalassignment_update_grade
+
+on:
+  workflow_dispatch:
+    inputs:
+      classroom:
+        description: "Klassenzimmer (Ordner im Config-Repo)"
+        required: true
+        default: "m323-ix24"
+      assignment:
+        description: "Nur dieses Assignment (leer = alle)"
+        required: false
+      user:
+        description: "Nur dieser GitHub-Login (leer = alle)"
+        required: false
+      dry_run:
+        description: "Nur anzeigen, nichts an Moodle senden"
+        type: boolean
+        default: false
+      force:
+        description: "Auch unveränderte Noten erneut übertragen"
+        type: boolean
+        default: false
+  # Nachtlauf, 40 Minuten nach "Collect Scores" (17 4 * * *).
+  schedule:
+    - cron: "57 4 * * *"
+
+permissions:
+  contents: write       # schreibt den Übertragungs-Zustand zurück
+
+concurrency:
+  group: moodle-sync-${{ github.event.inputs.classroom || 'all' }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Install pygrader50
+        run: pip install "pygrader50 @ git+https://github.com/BZZ-Commons/pygrader50@v2.0.0"
+
+      - name: Übertragen
+        env:
+          MOODLE_URL: ${{ vars.MOODLE_URL }}
+          MOODLE_TOKEN: ${{ secrets.MOODLE_TOKEN }}
+          MOODLE_FUNCTION: ${{ vars.MOODLE_FUNCTION }}
+          # Liest die Release-Bodies der Studi-Repos für den Feedback-Text.
+          GH_TOKEN: ${{ secrets.CLASSROOM50_SERVICE_TOKEN }}
+          CLASSROOM: ${{ github.event.inputs.classroom || 'm323-ix24' }}
+          ASSIGNMENT: ${{ github.event.inputs.assignment }}
+          USER_FILTER: ${{ github.event.inputs.user }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          FORCE: ${{ github.event.inputs.force }}
+        run: |
+          set -euo pipefail
+          # Bewusst if-Blöcke statt `[ … ] && ARGS+=…`: unter `set -e` würde ein
+          # fehlschlagender letzter Test den Step rot färben.
+          ARGS=("$CLASSROOM/scores.json" "--state" "$CLASSROOM/moodle-state.json")
+          if [ -n "${ASSIGNMENT:-}" ];  then ARGS+=("--assignment" "$ASSIGNMENT"); fi
+          if [ -n "${USER_FILTER:-}" ]; then ARGS+=("--user" "$USER_FILTER"); fi
+          if [ "${DRY_RUN:-false}" = "true" ]; then ARGS+=("--dry-run"); fi
+          if [ "${FORCE:-false}" = "true" ];   then ARGS+=("--force"); fi
+          python -m pygrader50.moodle "${ARGS[@]}"
+
+      - name: Zustand committen
+        # always(): auch wenn einzelne Übertragungen scheiterten, sollen die
+        # erfolgreichen nicht beim nächsten Lauf erneut geschickt werden.
+        if: always() && github.event.inputs.dry_run != 'true'
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain '*/moodle-state.json' 2>/dev/null)" ]; then
+            git add '*/moodle-state.json'
+            git -c user.name=classroom50-bot -c user.email=bot@classroom50 \
+                commit -m "[Moodle] Übertragungs-Zustand aktualisiert"
+            git push
+          else
+            echo "keine Änderungen am Übertragungs-Zustand"
+          fi

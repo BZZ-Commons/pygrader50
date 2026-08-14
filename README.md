@@ -1,87 +1,117 @@
 # pygrader50
 
 Autograder-Engine für [Classroom 50](https://github.com/foundation50/classroom50) —
-bewertet Python-Abgaben mit **pytest** und **pylint** und schreibt das
-`classroom50/result/v1`-Payload, das der Runner erwartet.
+bewertet Python-Abgaben mit **pytest** und **pylint**, schreibt das
+`classroom50/result/v1`-Payload und überträgt die Punkte nach **Moodle**.
 
-Nachfolger von [BZZ-Commons/pygrader](https://github.com/BZZ-Commons/pygrader)
-(GitHub Classroom). Alles, was ohne GitHub Classroom noch gebraucht wird, lebt hier.
+Nachfolger von [BZZ-Commons/pygrader](https://github.com/BZZ-Commons/pygrader).
+Dort steckte die Bewertung noch in einem GitHub-Classroom-Workflow; hier ist sie
+ein installierbares Paket mit zwei Einstiegspunkten.
 
-## Wie es läuft
+- **[SETUP.md](SETUP.md)** — Einrichtung von Grund auf, Migration, Fehlersuche
+- **[CLI.md](CLI.md)** — alle Kommandos, Optionen und Umgebungsvariablen
+
+## Die zwei Einstiegspunkte
 
 ```
-Studi push
+python -m pygrader50           bewertet eine Abgabe   (läuft im Studi-Repo)
+python -m pygrader50.moodle    überträgt die Punkte   (läuft im classroom50-Repo)
+```
+
+Die Trennung ist Absicht: der Moodle-Token erlaubt es, **beliebige Noten für
+beliebige Personen** zu setzen. Er gehört deshalb nicht in ein Repository, in das
+Studierende pushen können — dort liest ihn ein selbst hinzugefügter Workflow in
+drei Zeilen aus. Bewertet wird im Studi-Repo, übertragen wird zentral.
+
+## Ablauf
+
+```
+Studi pusht
   └─ classroom50 autograde-runner (Studi-Repo)
-       └─ runner.py  ←  von der Pages-Site der Lehrperson
-            └─ <classroom>/autograder.py   = bootstrap/autograder.py aus diesem Repo
+       └─ runner.py  ←  Pages-Site des classroom50-Repos
+            └─ <classroom>/autograder.py   = bootstrap/autograder.py von hier
                  └─ pip install pygrader50@<tag>
                       └─ python -m pygrader50
-                           ├─ result.json        → Release, Commit-Status, scores.json
-                           └─ release-body.md    → Release-Text + Job-Summary
+                           ├─ result.json      → Release, Commit-Status, scores.json
+                           └─ release-body.md  → Release-Text + Job-Summary
+
+collect-scores (nachts, classroom50)      → <classroom>/scores.json
+  └─ moodle-sync (nachts oder auf Knopfdruck)
+       └─ python -m pygrader50.moodle      → Moodle-Notenbuch
 ```
 
-Der Übertrag nach Moodle passiert **nicht** hier, sondern nachts zentral aus dem
-`classroom50`-Repo — der Moodle-Token gehört nicht in ein Repo, in das Studierende
-pushen können.
+## Konfiguration einer Aufgabe
 
-## Konfiguration
-
-Drei Dateien steuern die Bewertung, im Format der bestehenden BZZ-Templates:
+Drei Dateien im Format der bestehenden BZZ-Templates:
 
 | Datei | Inhalt |
 |---|---|
-| `unittests.json` | `[{"name": …, "function": …, "timeout": 10, "points": 2}]` |
+| `unittests.json` | `[{"name": "test_ggt", "function": "test_ggt", "timeout": 10, "points": 2}]` |
 | `lint.json` | `{"files": ["main.py"], "ignore": [], "max": 5}` |
 | `pylintrc` | pylint-Konfiguration |
 
 Gesucht wird **pro Datei**, in dieser Reihenfolge:
 
-1. `$RUNNER_TEMP/classroom50-runtime/<assignment>/` — das entpackte classroom50-Bundle
-   (`<classroom>/autograders/<slug>/` im Config-Repo). Lehrpersonen-kontrolliert,
-   für Studierende nicht editierbar.
+1. `$RUNNER_TEMP/classroom50-runtime/<assignment>/` — das entpackte
+   classroom50-Bundle aus `<classroom>/autograders/<slug>/`. Von der Lehrperson
+   kontrolliert, für Studierende nicht editierbar.
 2. `.github/autograding/` im Studi-Repo — der bisherige Ort, bleibt als Fallback.
 3. `$PYGRADER50_CONFIG_DIR` — nur für lokale Entwicklung.
 
-Fehlt beides, wird eine 0/0-Abgabe aufgezeichnet und im Log gewarnt — kein roter Job.
+Fehlt beides, wird eine 0/0-Abgabe aufgezeichnet und im Log gewarnt. Kein roter
+Job: eine Aufgabe ohne hinterlegte Bewertung ist ein Konfigurationsstand, kein
+Infrastrukturfehler.
 
-Beispiel-Bundle: [`examples/bundle/`](examples/bundle).
+Vorlage: [`examples/bundle/`](examples/bundle).
 
 ## Bewertung
 
-- **Unittests**: ein `tests[]`-Eintrag pro Fall, `passed` = volle Punktzahl erreicht.
-- **Linting**: ein Eintrag `Linting`, Punkte = `global_note / 10 * max`,
+- **Unittests** — ein Eintrag pro Testfall, `passed` = volle Punktzahl erreicht.
+  Jeder Fall läuft als eigener pytest-Aufruf mit eigenem Timeout, damit ein
+  hängender Test die übrigen nicht mitreisst.
+- **Linting** — ein Eintrag `Linting`, Punkte = `global_note / 10 * max`,
   `passed` = mehr als 0 Punkte. Eine Konventions-Meldung kostet also Punkte,
   färbt den Commit-Status aber nicht rot.
-- `result.json` verlangt ganzzahlige Punkte → gerundet. Der exakte Wert steht im
-  Feedback-Text von `release-body.md`.
+- `result.json` verlangt **ganze Zahlen**, es wird gerundet. Der exakte Wert
+  steht im Feedback-Text.
+- Erwartete und tatsächliche Werte im Feedback stammen aus dem
+  `pytest_assertrepr_compare`-Hook, der vor dem Lauf ins Checkout kopiert wird.
 
-## Installation in einem Klassenzimmer
+Beispiel eines erzeugten `release-body.md`:
 
-```bash
-gh teacher autograder set-default <org> <classroom> --from bootstrap/autograder.py
+```markdown
+### classroom50 autograde: 0/7
+
+## Unittests
+| name | feedback | expected | actual | points | max |
+| --- | --- | --- | --- | --- | --- |
+| test_ggt | Assertion Error | 8 | None | 0 | 2 |
+
+**0.00/2.00 Points (0.00%)**
 ```
 
-`bootstrap/autograder.py` pinnt die Engine-Version (`VERSION`). Update eines
-Klassenzimmers = Tag hier hochziehen, eine Zeile im Bootstrap ändern,
-publish-pages läuft automatisch.
+## Was pygrader50 bewusst nicht tut
+
+- **Keine Zusatzfelder in `result.json`.** CLI und Dashboard von Classroom 50
+  parsen strikt; alles Menschenlesbare gehört in `release-body.md`.
+- **Kein `$GITHUB_OUTPUT`.** Status und Zusammenfassung leitet der Runner selbst
+  aus `result.json` ab — ein Kanal weniger, der auseinanderlaufen kann.
+- **Kein `pip install -r requirements.txt`** aus dem Studi-Repo. pygrader50 bringt
+  eigene, gepinnte Abhängigkeiten mit; das hält die Bewertung reproduzierbar.
 
 ## Entwicklung
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e .
-.venv/bin/python -m pytest -q       # Unit- und End-to-End-Tests
-.venv/bin/python -m pylint src/pygrader50 bootstrap
+.venv/bin/python -m pytest -q                        # 44 Tests
+.venv/bin/python -m pylint src/pygrader50 bootstrap   # 10.00/10
 ```
 
 Die End-to-End-Tests bauen ein Wegwerf-Studi-Repo und lassen den echten
-Entrypoint darüber laufen. `tests/test_result.py` spiegelt die Validierung aus
-`runner.py`: schlägt sie fehl, würde das Gradebook das Payload verwerfen.
+Entrypoint als Subprozess darüber laufen. `tests/test_result.py` prüft gegen eine
+Kopie der Validierung aus `runner.py`: schlägt sie fehl, würde das Gradebook das
+Payload verwerfen.
 
-## Kontrakt mit dem Runner
+## Lizenz
 
-- Arbeitsverzeichnis ist das Studi-Checkout.
-- Ausgabe: `./result.json` (Pflicht), `./release-body.md` (optional).
-- Exit **0** für jedes Bewertungs-Ergebnis, auch für eine durchgefallene Abgabe.
-- Exit **≠ 0** nur bei Infrastruktur-Fehlern — die Abgabe wird dann als `error`
-  aufgezeichnet.
-- Keine Zusatzfelder in `result.json`: CLI und Dashboard parsen strikt.
+MIT
