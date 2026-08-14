@@ -169,6 +169,22 @@ SUCCESS_XML = """<?xml version="1.0" encoding="UTF-8"?>
 ERROR_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <RESPONSE><SINGLE><KEY name="message"><VALUE>No matching assignment found.</VALUE></KEY></SINGLE></RESPONSE>"""
 
+# What a REST webservice returns when validate_parameters() rejects a field.
+# MESSAGE is localised and says nothing about the cause; ERRORCODE and
+# DEBUGINFO do.
+EXCEPTION_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<EXCEPTION class="invalid_parameter_exception">
+  <ERRORCODE>invalidparameter</ERRORCODE>
+  <MESSAGE>Ungueltiger Parameterwert</MESSAGE>
+  <DEBUGINFO>externallink: the value is "https://x/tag/submit%2Fy"</DEBUGINFO>
+</EXCEPTION>"""
+
+EXCEPTION_XML_NO_DEBUG = """<?xml version="1.0" encoding="UTF-8"?>
+<EXCEPTION class="invalid_parameter_exception">
+  <ERRORCODE>invalidparameter</ERRORCODE>
+  <MESSAGE>Ungueltiger Parameterwert</MESSAGE>
+</EXCEPTION>"""
+
 
 def test_parse_response():
     assert moodle.parse_response(SUCCESS_XML) == (True, 'ok')
@@ -178,6 +194,23 @@ def test_parse_response():
 
     ok, message = moodle.parse_response('<html>login required</html>')
     assert ok is False and 'XML' in message
+
+
+def test_parse_response_keeps_moodle_error_details():
+    """The localised message alone never names the rejected field."""
+    ok, message = moodle.parse_response(EXCEPTION_XML)
+    assert ok is False
+    assert 'Ungueltiger Parameterwert' in message
+    assert 'errorcode: invalidparameter' in message
+    assert 'externallink' in message
+
+
+def test_parse_response_without_debuginfo():
+    """A production Moodle suppresses DEBUGINFO; the errorcode still survives."""
+    ok, message = moodle.parse_response(EXCEPTION_XML_NO_DEBUG)
+    assert ok is False
+    assert 'errorcode: invalidparameter' in message
+    assert 'debuginfo' not in message
 
 
 def test_endpoint_url():

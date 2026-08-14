@@ -202,8 +202,24 @@ def parse_response(text: str) -> tuple[bool, str]:
     if message is None:
         message = root.find('.//MESSAGE')
     if message is not None and message.text:
-        return False, message.text.replace('\\n', '\n')
+        return False, _with_details(root, message.text.replace('\\n', '\n'))
     return False, ET.tostring(root, encoding='unicode')
+
+
+def _with_details(root: ET.Element, message: str) -> str:
+    """Append Moodle's ERRORCODE and DEBUGINFO to `message` when present.
+
+    The localised MESSAGE alone ("Ungültiger Parameterwert") never says *which*
+    field Moodle rejected. ERRORCODE is stable across languages and DEBUGINFO
+    names the offending value — the only way to tell a bad `externallink` from a
+    bad `feedback` without guessing. DEBUGINFO is absent unless the Moodle
+    instance runs at developer debug level, hence both are optional.
+    """
+    for tag in ('ERRORCODE', 'DEBUGINFO'):
+        found = root.find(f'.//{tag}')
+        if found is not None and found.text:
+            message += f' [{tag.lower()}: {found.text.strip()}]'
+    return message
 
 
 def post(endpoint: str, payload: dict, timeout: int = 30) -> tuple[bool, str]:
