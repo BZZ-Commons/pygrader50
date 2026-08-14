@@ -59,8 +59,9 @@ Bindestriche enthalten darf. Classroom 50 arbeitet durchgehend mit Slugs.
 ===== requirements.txt =====
 
 Die Datei ist für die **lokale** Arbeit der Lernenden da. Die Bewertung auf
-GitHub installiert sie bewusst nicht: pygrader50 bringt eigene, gepinnte
-Abhängigkeiten mit, damit die Bewertung reproduzierbar bleibt.
+GitHub installiert sie bewusst nicht: pygrader50 bringt eigene Abhängigkeiten
+mit, exakt gepinnt in seiner ''pyproject.toml'', damit die Bewertung
+reproduzierbar bleibt.
 
 Die alten Pins ''pytest==8.3.3'' und ''pylint==3.2.7'' sind auf Python 3.14
 nicht mehr lauffähig. Wer die Datei pflegt, sollte sie deshalb auf aktuelle

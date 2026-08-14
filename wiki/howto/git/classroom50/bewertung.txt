@@ -124,7 +124,7 @@ alle Aufgaben auf ''"autograder": "default"''.
 
   * **Keine Zusatzfelder in ''result.json''.** CLI und Dashboard von Classroom 50 parsen strikt; alles Menschenlesbare gehört in den Release-Text.
   * **Kein ''$GITHUB_OUTPUT''.** Status und Zusammenfassung leitet der Runner selbst aus ''result.json'' ab — ein Kanal weniger, der auseinanderlaufen kann.
-  * **Kein ''pip install -r requirements.txt''** aus dem Studi-Repo. pygrader50 bringt eigene, gepinnte Abhängigkeiten mit; das hält die Bewertung reproduzierbar. Ausserdem sind die alten Template-Pins auf Python 3.14 nicht lauffähig.
+  * **Kein ''pip install -r requirements.txt''** aus dem Studi-Repo. pygrader50 bringt eigene Abhängigkeiten mit, exakt gepinnt in seiner ''pyproject.toml''. Das hält die Bewertung reproduzierbar: eine neue pylint-Version verschiebt die Lint-Punkte erst, wenn jemand den Pin hochzieht und einen neuen Tag setzt.
 
 ===== Lokal ausprobieren =====
 

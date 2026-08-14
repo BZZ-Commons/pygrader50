@@ -10,7 +10,7 @@ Die Beispiele verwenden durchgehend Platzhalter:
 | `<ORG>` | GitHub-Organisation der Klasse | `m320-ix25` |
 | `<CLASSROOM>` | Kurzname des Klassenzimmers = Ordner im Config-Repo | `m320-ix25` |
 | `<SLUG>` | Slug einer Aufgabe | `m320-lu04-a4-objektkommunikation` |
-| `<TAG>` | gepinnte pygrader50-Version | `v2.0.0` |
+| `<TAG>` | gepinnte pygrader50-Version | `v2.1.0` |
 
 `<ORG>` und `<CLASSROOM>` sind oft gleich, müssen es aber nicht sein — der
 Kurzname steht in `<CLASSROOM>/classroom.json`.
@@ -45,11 +45,27 @@ Nur nötig, wenn du pygrader50 selbst weiterentwickelst — für ein neues
 Klassenzimmer pinnst du einen bestehenden Tag und überspringst diesen Schritt.
 
 ```bash
-git tag v2.0.0 && git push origin main --tags
+git tag v2.1.0 && git push origin main --tags
 ```
 
 Der Tag ist das, was die Klassenzimmer pinnen. Ohne Tag kein reproduzierbares
 Semester: `main` würde sich unter laufenden Bewertungen verändern.
+
+Zum Tag gehören die Werkzeug-Versionen. `pyproject.toml` pinnt `pytest`,
+`pytest-timeout` und `pylint` exakt, nicht als Untergrenze — sonst installierte
+jeder Bewertungslauf das jeweils Neueste und eine pylint-Minor-Version
+verschöbe mitten im Semester allen die Lint-Punkte. Ein Upgrade heisst deshalb:
+
+1. Pins in `pyproject.toml` hochziehen und lokal prüfen, dass sie zusammen
+   installieren.
+2. `version` dort und `__version__` in `src/pygrader50/__init__.py` anheben.
+3. `VERSION` in `bootstrap/autograder.py` und den Tag in
+   `classroom50/moodle-sync.yaml` mitziehen.
+4. Taggen, dann Schritt 2 erneut ausführen.
+
+Was `pytest` und `pylint` selbst nachziehen (astroid hinter pylint), bewegt sich
+weiter innerhalb der eigenen Schranken. Das ist der Rest an Spielraum — klein
+gegenüber einem pylint-Minor, aber nicht null.
 
 **Prüfen**, dass der Pin installierbar ist — sonst scheitert er erst im ersten
 Studi-Lauf:
@@ -75,7 +91,7 @@ die Datei auf die Pages-Site, wo `runner.py` sie bei jeder Abgabe holt.
 Die Version steht in `bootstrap/autograder.py`:
 
 ```python
-VERSION = 'v2.0.0'
+VERSION = 'v2.1.0'
 ```
 
 Ein Upgrade heisst später: Tag hochziehen, Zeile ändern, `set-default` erneut

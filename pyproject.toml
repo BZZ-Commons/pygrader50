@@ -4,16 +4,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pygrader50"
-version = "2.0.0"
+version = "2.1.0"
 description = "Autograder engine (pytest + pylint) for Classroom 50"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "BZZ-Commons" }]
+# Exact pins, not floors. A grading run installs these fresh every time, so a
+# floor would let a new pylint release change everyone's lint score mid-term
+# with no commit here. Bumping is a deliberate act once per term, together with
+# the tag that bootstrap/autograder.py points at.
+#
+# This pins what pygrader50 asks for directly; transitive versions (astroid
+# behind pylint) still float within their own constraints. That is the
+# remaining gap — it moves scores far less than a pylint minor would.
 dependencies = [
-    "pytest>=8.3",
-    "pytest-timeout>=2.3",
-    "pylint>=3.3",
+    "pytest==9.1.1",
+    "pytest-timeout==2.4.0",
+    "pylint==4.0.7",
 ]
 
 [project.urls]

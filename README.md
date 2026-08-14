@@ -127,7 +127,12 @@ Beispiel eines erzeugten `release-body.md`:
 - **Kein `$GITHUB_OUTPUT`.** Status und Zusammenfassung leitet der Runner selbst
   aus `result.json` ab — ein Kanal weniger, der auseinanderlaufen kann.
 - **Kein `pip install -r requirements.txt`** aus dem Studi-Repo. pygrader50 bringt
-  eigene, gepinnte Abhängigkeiten mit; das hält die Bewertung reproduzierbar.
+  eigene Abhängigkeiten mit, exakt gepinnt in [`pyproject.toml`](pyproject.toml).
+  Das hält die Bewertung reproduzierbar: eine neue pylint-Version verschiebt die
+  Lint-Punkte erst, wenn hier jemand den Pin hochzieht und einen neuen Tag setzt.
+  Transitive Versionen (astroid hinter pylint) bewegen sich weiterhin innerhalb
+  ihrer eigenen Schranken — der verbleibende Spielraum, deutlich kleiner als ein
+  pylint-Minor.
 
 ## Entwicklung
 
