@@ -71,18 +71,43 @@ def authenticated() -> bool:
     return bool(auth_header() or credentials()[0])
 
 
-def log_in(base_url: str) -> None:
-    """Open a session, so later calls carry the cookie. No-op without a login.
+def whoami(base_url: str) -> str:
+    """Login name the wiki sees us as, or '' when the call runs as a guest."""
+    try:
+        result = call(base_url, 'core.whoAmI', {})
+    except WikiError:
+        return ''
+    return str((result or {}).get('login') or '') if isinstance(result, dict) else ''
 
-    `remoteuser` may lock the API down to named users, but the login method is
-    exempt from that restriction — so this works even where an anonymous call
-    would be refused outright.
+
+def authenticate(base_url: str) -> str:
+    """Establish an identity and return it. Raises WikiError when it stays guest.
+
+    Verifying beats assuming: a token that is expired or not scoped for the API
+    is not rejected, it is *ignored* — the call then runs as a guest and only
+    fails later on write, with a 401 that reads like a wrong password. So the
+    token is checked against core.whoAmI first, and a configured login is used
+    as the fallback (its session also sidesteps the remoteuser restriction).
     """
+    if auth_header():
+        identity = whoami(base_url)
+        if identity:
+            return f'{identity} (Token)'
+        print('Token authentifiziert nicht — versuche Anmeldung', file=sys.stderr)
+
     user, password = credentials()
-    if not user or auth_header():
-        return
+    if not user:
+        raise WikiError('nicht authentifiziert: Token ungültig, kein Login gesetzt')
+
+    # The token header would keep overriding the session, so drop it for the
+    # login and every call after it.
+    os.environ.pop('DOKUWIKI_TOKEN', None)
     if call(base_url, 'core.login', {'user': user, 'pass': password}) is not True:
         raise WikiError('core.login: Anmeldung abgelehnt')
+    identity = whoami(base_url)
+    if not identity:
+        raise WikiError('angemeldet, aber die API sieht weiter keinen Benutzer')
+    return f'{identity} (Session)'
 
 
 def call(base_url: str, method: str, params: dict) -> object:
@@ -157,7 +182,7 @@ def main() -> int:
 
     if apply:
         try:
-            log_in(base_url)
+            print(f'angemeldet als {authenticate(base_url)}')
         except WikiError as exc:
             print(str(exc), file=sys.stderr)
             return 2
