@@ -27,7 +27,7 @@ publicly readable.
 
 from __future__ import annotations
 
-import base64
+import http.cookiejar
 import json
 import os
 import pathlib
@@ -45,17 +45,44 @@ class WikiError(RuntimeError):
     """The wiki refused a call."""
 
 
+# Session cookies from core.login. DokuWiki authenticates the JSON-RPC
+# interface either by API token or by an ordinary session — HTTP Basic is
+# silently ignored, which is worth knowing: the calls then run as a guest and
+# fail on write with a 401 that looks like bad credentials.
+_OPENER = urllib.request.build_opener(
+    urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+)
+
+
 def auth_header() -> dict[str, str]:
-    """Authorization header from the environment, empty when unauthenticated."""
+    """Authorization header for the token path, empty when logging in instead."""
     token = os.environ.get('DOKUWIKI_TOKEN', '').strip()
-    if token:
-        return {'Authorization': f'Bearer {token}'}
-    user = os.environ.get('DOKUWIKI_USER', '').strip()
-    password = os.environ.get('DOKUWIKI_PASSWORD', '')
-    if user:
-        raw = base64.b64encode(f'{user}:{password}'.encode()).decode()
-        return {'Authorization': f'Basic {raw}'}
-    return {}
+    return {'Authorization': f'Bearer {token}'} if token else {}
+
+
+def credentials() -> tuple[str, str]:
+    """Login and password from the environment, empty strings when unset."""
+    return (os.environ.get('DOKUWIKI_USER', '').strip(),
+            os.environ.get('DOKUWIKI_PASSWORD', ''))
+
+
+def authenticated() -> bool:
+    """True when either a token or a login is configured."""
+    return bool(auth_header() or credentials()[0])
+
+
+def log_in(base_url: str) -> None:
+    """Open a session, so later calls carry the cookie. No-op without a login.
+
+    `remoteuser` may lock the API down to named users, but the login method is
+    exempt from that restriction — so this works even where an anonymous call
+    would be refused outright.
+    """
+    user, password = credentials()
+    if not user or auth_header():
+        return
+    if call(base_url, 'core.login', {'user': user, 'pass': password}) is not True:
+        raise WikiError('core.login: Anmeldung abgelehnt')
 
 
 def call(base_url: str, method: str, params: dict) -> object:
@@ -67,7 +94,7 @@ def call(base_url: str, method: str, params: dict) -> object:
         method='POST',
     )
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+        with _OPENER.open(request, timeout=TIMEOUT) as response:
             body = json.loads(response.read().decode('UTF-8'))
     except urllib.error.HTTPError as exc:
         # The body carries the API's own message ("not authorized to call
@@ -118,7 +145,7 @@ def main() -> int:
     if not SOURCE_DIR.is_dir():
         print(f'{SOURCE_DIR} fehlt', file=sys.stderr)
         return 2
-    if apply and not auth_header():
+    if apply and not authenticated():
         print('DOKUWIKI_TOKEN oder DOKUWIKI_USER/DOKUWIKI_PASSWORD setzen',
               file=sys.stderr)
         return 2
@@ -127,6 +154,13 @@ def main() -> int:
     print(f'== {len(files)} Seiten gegen {base_url} ==')
     if not apply:
         print('(Trockenlauf — --apply schreibt)')
+
+    if apply:
+        try:
+            log_in(base_url)
+        except WikiError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
 
     tally = {'geschrieben': 0, 'unverändert': 0, 'fehlgeschlagen': 0}
     for path in files:
