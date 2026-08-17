@@ -286,13 +286,26 @@ die Rechte, desto kleiner der Schaden bei einem Leck.
 ### 5.3 Moodle-Seite prüfen
 
 Der Übertrag verlangt eine Aktivität *External Assignment* mit **exakt dem Slug**
-als Namen und einen Moodle-Benutzernamen, der dem GitHub-Login entspricht.
+als Namen, und den GitHub-Login der lernenden Person in ihrem
+Moodle-Profilfeld — an der BZZ das Feld *GitHub Classroom*.
 
-`No matching assignment found. Contact your teacher.` heisst **nicht** zwingend,
-dass die Aktivität fehlt: das Plugin löst `(assignmentname, username)` gemeinsam
-auf und meldet denselben Text, wenn nur der Benutzer im Kurs fehlt. Zum Testen
-deshalb einen echten Studi-Login nehmen, nicht den eigenen Lehrer-Account — der
-ist in Moodle meist kein Kursteilnehmer.
+Welches Feld gelesen wird, steht in der Plugin-Einstellung
+`mod_externalassignment/external_username` (Vorgabe: Kurzname `github_user`).
+Das Plugin sucht ausschliesslich dort, **nicht** im Moodle-Benutzernamen:
+
+```sql
+SELECT userid FROM {user_info_data} WHERE fieldid=:fieldid AND data=:ghusername
+```
+
+Zwei Fehlermeldungen, die auseinanderzuhalten sind:
+
+| Meldung | Bedeutung |
+|---|---|
+| `No Moodle user found with username "X": Update your Moodle profile.` | Profilfeld leer oder falsch |
+| `No matching assignment found. Contact your teacher.` | Aktivität fehlt **oder** die Person ist nicht im Kurs — das Plugin löst `(assignmentname, userid)` gemeinsam auf |
+
+Zum Testen deshalb einen echten Studi-Login nehmen, nicht den eigenen
+Lehrer-Account — der ist in Moodle meist kein Kursteilnehmer.
 
 ### 5.4 Erster Lauf
 

@@ -8,7 +8,7 @@
 | Rotes Kreuz, aber alle Tests grün | Das Linting gab 0 Punkte. Zeile ''Linting'' im Release ansehen. |
 | pylint meckert auf GitHub mehr als lokal | Die Bewertung benutzt eigene, neuere Versionen (pylint 4.x) statt deiner ''requirements.txt''. |
 | Ein Test bricht mit Timeout ab | Endlosschleife oder wartende Eingabe (''input()'') im Code. Jeder Testfall hat ein eigenes Zeitlimit. |
-| Note fehlt in Moodle | Übertrag läuft nachts. Fehlt sie am Folgetag: meist Moodle-Benutzername ≠ GitHub-Login → Lehrperson. |
+| Note fehlt in Moodle | Übertrag läuft nachts. Fehlt sie am Folgetag: meist steht der GitHub-Name nicht im Moodle-Profil, Feld //GitHub Classroom// → [[howto:git:github_moodle|]]. |
 
 Zu Git, venv und PyCharm siehe [[howto:git:probleme|]] und
 [[howto:git:python_venv|]].

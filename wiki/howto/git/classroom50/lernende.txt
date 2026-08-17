@@ -7,13 +7,12 @@ Ablauf über GitHub Classroom steht unter
 ===== Voraussetzungen =====
 
   - Ein GitHub-Konto, verknüpft mit der BZZ — siehe [[howto:git:githubkonto|]] und [[howto:git:githubsso|]].
-  - Dein **Moodle-Benutzername muss deinem GitHub-Login entsprechen**. Ist das nicht der Fall, wird deine Abgabe zwar bewertet, die Note kommt aber nicht in Moodle an. Melde dich in dem Fall bei der Lehrperson.
+  - Dein **GitHub-Benutzername steht in deinem Moodle-Profil**, im Feld //GitHub Classroom// — siehe [[howto:git:github_moodle|GitHub-Benutzername in Moodle eintragen]]. Fehlt er oder ist er falsch geschrieben, wird deine Abgabe zwar bewertet, die Note kommt aber nicht in Moodle an.
 
 <WRAP center round important 90%>
-Neu gegenüber GitHub Classroom: Der GitHub-Benutzername wird **nicht mehr** im
-Moodle-Profil eingetragen (weder unter //Pseudonym// noch unter
-//GitHub Classroom//). Classroom 50 vergleicht direkt Moodle-Benutzername und
-GitHub-Login.
+Das Profilfeld gilt unter Classroom 50 unverändert weiter. Moodle findet dich
+**nur** darüber — dein Moodle-Benutzername spielt für die Zuordnung keine Rolle.
+Trage den GitHub-Namen zeichengenau ein, bevor du die erste Aufgabe abgibst.
 </WRAP>
 
 ===== 1. Aufgabe annehmen =====
@@ -104,6 +103,6 @@ Verspätete Abgaben werden übertragen und im Feedback als solche gekennzeichnet
 | Das Häkchen ist rot, obwohl alle Tests grün sind. | Dann kostet das Linting die Punkte. Schau in die Zeile ''Linting'' im Release. |
 | Es läuft gar kein Bewertungslauf. | Enthält deine Commit-Message ''NOACTION'' oder ''CLASSROOM 50'', wird der Lauf absichtlich übersprungen. Sonst: Reiter **Actions** prüfen. |
 | Ich habe nach dem Abgabetermin gepusht. | Die Abgabe wird trotzdem bewertet und als verspätet markiert. |
-| Meine Note fehlt in Moodle. | Meist stimmt Moodle-Benutzername ≠ GitHub-Login. Der Lehrperson melden. |
+| Meine Note fehlt in Moodle. | Meist fehlt der GitHub-Name im Moodle-Profil, Feld //GitHub Classroom// — siehe [[howto:git:github_moodle|]]. Sonst der Lehrperson melden. |
 
 Mehr: [[.:troubleshooting|Problembehandlung]].

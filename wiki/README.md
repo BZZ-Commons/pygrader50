@@ -48,8 +48,9 @@ für noch nicht migrierte Module stehen.
 
 - `https://wiki.bzz.ch/howto/git/start` — keine roten Links mehr
 - Suche nach `pygrader` im Wiki: Treffer ausserhalb der Archivseiten prüfen
-- Suche nach `Pseudonym` und `GitHub Benutzername`: Reste der alten
-  Moodle-Profil-Zuordnung, gilt unter Classroom 50 nicht mehr
+- `howto:git:github_moodle` bleibt gültig und wird aus den Classroom-50-Seiten
+  verlinkt — das Moodle-Profilfeld *GitHub Classroom* ist weiterhin die
+  einzige Zuordnung zwischen Moodle-Konto und GitHub-Login
 
 ## Quellen
 

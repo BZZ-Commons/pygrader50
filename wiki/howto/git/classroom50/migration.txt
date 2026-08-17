@@ -16,7 +16,7 @@ Migration ist erst mit Schritt 2 abgeschlossen.
 | Bewertungs-Logik | ''BZZ-Commons/pygrader'' | ''BZZ-Commons/pygrader50'', per Tag gepinnt |
 | Moodle-Übertrag | direkt aus dem Studi-Repo | nachts, zentral aus dem Config-Repo |
 | Moodle-Token | in der Org, per ''secrets: inherit'' überall lesbar | nur im Config-Repo |
-| Zuordnung zu Moodle | GitHub-Name im Moodle-Profil | Moodle-Benutzername = GitHub-Login |
+| Zuordnung zu Moodle | GitHub-Name im Moodle-Profil | unverändert, dasselbe Profilfeld |
 | Konfigurationsdateien | ''.github/autograding/'' | Bundle im Config-Repo, ''.github/autograding/'' bleibt Fallback |
 
 Die drei Dateien ''unittests.json'', ''lint.json'' und ''pylintrc'' behalten ihr
@@ -104,10 +104,12 @@ gh secret list --org <ORG>
 
 ===== 4. Moodle-Seite umstellen =====
 
-Unter GitHub Classroom trugen die Lernenden ihren GitHub-Namen im Moodle-Profil
-ein. Classroom 50 vergleicht stattdessen direkt **Moodle-Benutzername und
-GitHub-Login**. Vor dem ersten echten Übertrag prüfen, ob das für alle
-Teilnehmenden zutrifft.
+Hier ändert sich **nichts**: Die Lernenden tragen ihren GitHub-Namen weiterhin
+im Moodle-Profil ein, Feld //GitHub Classroom//
+([[howto:git:github_moodle|Anleitung]]). Das Plugin
+''mod_externalassignment'' liest ausschliesslich dieses Feld; der
+Moodle-Benutzername spielt keine Rolle. Vor dem ersten echten Übertrag prüfen,
+ob das Feld bei allen Teilnehmenden gefüllt und richtig geschrieben ist.
 
 Der Rest — Aktivität //External Assignment//, Slug als Name, Token im
 Config-Repo — steht unter [[.:moodle|Noten nach Moodle übertragen]].

@@ -23,15 +23,23 @@ trotzdem nötig gewesen.
 
   - Eine Aktivität vom Typ **External Assignment** (''mod_externalassignment'').
   - Ihr Name ist **exakt der Slug** der Aufgabe, z.B. ''m323-lu01-a02-imperativer-ggt''.
-  - Der **Moodle-Benutzername entspricht dem GitHub-Login** der lernenden Person.
+  - Der **GitHub-Login steht im Moodle-Profil** der lernenden Person, im Feld //GitHub Classroom// — siehe [[howto:git:github_moodle|]].
   - Die Person ist im Kurs eingeschrieben.
 
+Welches Profilfeld gelesen wird, steht in der Plugin-Einstellung
+''mod_externalassignment/external_username'' (Vorgabe: Kurzname ''github_user'').
+Das Plugin sucht ausschliesslich in diesem Feld — der Moodle-Benutzername ist
+für die Zuordnung **irrelevant**.
+
 <WRAP center round important 90%>
-''No matching assignment found. Contact your teacher.'' heisst **nicht**
-zwingend, dass die Aktivität fehlt. Das Plugin löst ''(assignmentname, username)''
-gemeinsam auf und meldet denselben Text, wenn nur der **Benutzer** im Kurs
-fehlt. Zum Testen deshalb einen echten Studi-Login nehmen — der eigene
-Lehrer-Account ist im Kurs meist kein Teilnehmer.
+Zwei Fehlermeldungen, die man auseinanderhalten muss:
+
+^ Meldung ^ Bedeutung ^
+| ''No Moodle user found with username "X": Update your Moodle profile.'' | Profilfeld leer oder falsch geschrieben |
+| ''No matching assignment found. Contact your teacher.'' | Aktivität fehlt **oder** die Person ist nicht im Kurs — das Plugin löst ''(assignmentname, userid)'' gemeinsam auf |
+
+Zum Testen deshalb einen echten Studi-Login nehmen — der eigene Lehrer-Account
+ist im Kurs meist kein Teilnehmer.
 </WRAP>
 
 ===== Zugangsdaten =====

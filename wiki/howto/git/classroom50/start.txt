@@ -18,9 +18,11 @@ Konfigurations-Repository der Klasse.
 | Bewertungs-Logik | ''BZZ-Commons/pygrader'' | ''BZZ-Commons/pygrader50'', per Tag gepinnt |
 | Resultat der Abgabe | Kommentar / Moodle-Aufruf aus dem Studi-Repo | GitHub-Release + Commit-Status + Feedback-PR |
 | Moodle-Übertrag | direkt aus dem Studi-Repo, Token per ''secrets: inherit'' | nachts, zentral aus dem Config-Repo |
-| Zuordnung zu Moodle | GitHub-Benutzername im Moodle-Profil (Feld //Pseudonym// bzw. //GitHub Classroom//) | **Moodle-Benutzername = GitHub-Login** |
+| Zuordnung zu Moodle | GitHub-Benutzername im Moodle-Profil, Feld //GitHub Classroom// | **unverändert** — dasselbe Profilfeld |
 
-Die letzte Zeile ist die häufigste Stolperfalle bei der Umstellung — siehe
+Die Zuordnung zu Moodle ändert sich als einzige **nicht**: das Plugin
+''mod_externalassignment'' liest den GitHub-Namen weiterhin aus dem Profilfeld,
+siehe [[howto:git:github_moodle|]] und
 [[.:moodle|Noten nach Moodle übertragen]].
 
 ===== Die beteiligten Repositories =====
