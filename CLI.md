@@ -233,6 +233,41 @@ gehören nicht in die Pin-Liste.
 
 ---
 
+## `scripts/sync-template-docstrings.py` — Aufgabenlink setzen
+
+Schreibt in jedes Template einen Modul-Docstring, der die Aufgabe benennt und
+auf ihre Seite im Wiki zeigt.
+
+```
+scripts/sync-template-docstrings.py <ORG> <CLASSROOM> [--apply]
+```
+
+```python
+"""ToDo-Liste mit SQLite und DAO-Klassen.
+
+Aufgabenstellung: https://wiki.bzz.ch/modul/m323/learningunits/lu06/aufgaben/dao
+"""
+```
+
+| Was | Verhalten |
+|---|---|
+| Zieldatei | die erste Datei aus `lint.json`, `main.py` bevorzugt |
+| vorhandener Modul-Docstring | wird ersetzt, nicht ergänzt |
+| Datei ohne gültiges Python | Docstring wird vorangestellt, sofern die Datei nicht schon mit einem String beginnt |
+| Aufgabe ohne eindeutige Wiki-Seite | `SKIP`, es wird nicht geraten |
+
+Der Slug führt **nicht** zur Wiki-Seite: `m323-lu01-a04-funktionaler-ggt` steht
+unter `lu01/aufgaben/funktionalereuklid`, und in LU04 ist die Nummerierung gegen
+die Seitennamen verschoben (`sorting2` ist A11, `sorting` ist A12). Schlüssel ist
+der Code `LUxx.Ayy` in der Wiki-Überschrift. Trägt ein Code mehrere Seiten,
+entscheidet der `OVERRIDES`-Block am Kopf des Skripts — sonst wird übersprungen.
+
+Wiederholbar. Eine Datei, die kaputtes Python enthält **und** bereits den
+Docstring trägt, meldet `SKIP`: dort lässt sich der bestehende Docstring nicht
+sicher lokalisieren, geschrieben ist er trotzdem schon.
+
+---
+
 ## `scripts/publish-wiki.py` — Wiki-Seiten aktualisieren
 
 Spiegelt [`wiki/`](wiki/) auf die DokuWiki-Instanz. Pfad = Seiten-ID:

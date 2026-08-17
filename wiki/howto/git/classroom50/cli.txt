@@ -188,6 +188,40 @@ Aufgabe selbst eintragen sollen (Flask in den lu06-Aufgaben), gehören **nicht**
 in die Pin-Liste.
 </WRAP>
 
+===== scripts/sync-template-docstrings.py — Aufgabenlink setzen =====
+
+Schreibt in jedes Template einen Modul-Docstring, der die Aufgabe benennt und
+auf ihre Seite in diesem Wiki zeigt.
+
+<code>
+scripts/sync-template-docstrings.py <ORG> <CLASSROOM> [--apply]
+</code>
+
+<code python>
+"""ToDo-Liste mit SQLite und DAO-Klassen.
+
+Aufgabenstellung: https://wiki.bzz.ch/modul/m323/learningunits/lu06/aufgaben/dao
+"""
+</code>
+
+^ Was ^ Verhalten ^
+| Zieldatei | die erste Datei aus ''lint.json'', ''main.py'' bevorzugt |
+| vorhandener Modul-Docstring | wird ersetzt, nicht ergänzt |
+| Datei ohne gültiges Python | Docstring wird vorangestellt, sofern die Datei nicht schon mit einem String beginnt |
+| Aufgabe ohne eindeutige Wiki-Seite | ''SKIP'', es wird nicht geraten |
+
+<WRAP center round important 90%>
+Der Slug führt **nicht** zur Wiki-Seite: ''m323-lu01-a04-funktionaler-ggt'' steht
+unter ''lu01/aufgaben/funktionalereuklid'', und in LU04 ist die Nummerierung
+gegen die Seitennamen verschoben (''sorting2'' ist A11, ''sorting'' ist A12).
+Schlüssel ist der Code ''LUxx.Ayy'' in der Überschrift der Aufgabenseite. Wer
+eine Aufgabenseite umbenennt, darf den Code nicht verlieren.
+</WRAP>
+
+Trägt ein Code mehrere Seiten, entscheidet der ''OVERRIDES''-Block am Kopf des
+Skripts — sonst wird übersprungen. Wiederholbar: ein aktuelles Template meldet
+''ok''.
+
 ===== scripts/publish-wiki.py — diese Seiten aktualisieren =====
 
 Spiegelt den Ordner ''wiki/'' aus dem Repo hierher. Pfad = Seiten-ID:
