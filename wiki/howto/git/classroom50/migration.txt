@@ -49,9 +49,11 @@ verloren**.
 — das ist der Fallback, solange nicht jede Aufgabe ein Bundle im Config-Repo
 hat.
 
-''requirements.txt'' und Hilfsskripte wie ''_run_pylint.py'' stören nicht,
-werden aber nicht mehr benutzt: pygrader50 installiert die Studi-Abhängigkeiten
-bewusst nicht.
+''requirements.txt'' und Hilfsskripte wie ''_run_pylint.py'' stören die
+Bewertung nicht: pygrader50 installiert die Studi-Abhängigkeiten bewusst nicht.
+Für die lokale Arbeit der Lernenden zählt die Datei trotzdem, deshalb hält sie
+ein eigenes Skript aktuell — siehe
+[[.:cli#scriptssync-template-pinspy_pins_aktualisieren|sync-template-pins.py]].
 
 ==== 2.3 Die Zielliste richtig bilden ====
 

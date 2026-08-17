@@ -230,3 +230,25 @@ aktuelles Template meldet `ok`.
 `pytest-asyncio` muss mit `pytest` mitziehen — 0.23.8 und pytest 9 lassen sich
 nicht gemeinsam auflösen. Pakete, die die Studierenden selbst eintragen sollen,
 gehören nicht in die Pin-Liste.
+
+---
+
+## `scripts/publish-wiki.py` — Wiki-Seiten aktualisieren
+
+Spiegelt [`wiki/`](wiki/) auf die DokuWiki-Instanz. Pfad = Seiten-ID:
+`wiki/howto/git/classroom50/start.txt` → `howto:git:classroom50:start`.
+
+```
+scripts/publish-wiki.py [--apply] [--summary "Text"]
+```
+
+Geschrieben wird nur, was abweicht — ein erneuter Lauf meldet alles als
+`gleich` und hinterlässt keine leeren Versionen. Zugangsdaten aus der Umgebung:
+`DOKUWIKI_TOKEN`, sonst `DOKUWIKI_USER` und `DOKUWIKI_PASSWORD`, dazu optional
+`DOKUWIKI_URL` (Vorgabe `https://wiki.bzz.ch`).
+
+Ein untauglicher API-Token wird **nicht abgelehnt, sondern ignoriert**: die
+Aufrufe laufen als Gast weiter und scheitern erst beim Schreiben mit einer 401,
+die wie ein falsches Passwort aussieht. Das Skript prüft deshalb vorher per
+`core.whoAmI`, als wer es angemeldet ist, gibt das aus und fällt bei totem
+Token auf `core.login` zurück.

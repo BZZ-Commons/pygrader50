@@ -163,6 +163,54 @@ Fehler. Exit 1, sobald ein Repo scheitert.
 
 Hintergrund und die nötige Token-Rotation: [[.:migration|Migration]].
 
+===== scripts/sync-template-pins.py — Pins aktualisieren =====
+
+Hebt die Werkzeug-Versionen in den Template-Repos einer Klasse und legt
+''.python-version'' an.
+
+<code>
+scripts/sync-template-pins.py <ORG> <CLASSROOM> [--apply]
+</code>
+
+^ Was ^ Verhalten ^
+| ''pylint'', ''pytest'' | werden überall gesetzt, fehlende Zeilen angehängt |
+| ''httpx'', ''pytest-asyncio'' | nur dort gehoben, wo sie schon stehen |
+| alles andere | bleibt Zeile für Zeile erhalten, inkl. Kommentaren |
+| ''.python-version'' | wird auf die konfigurierte Version gesetzt |
+
+Die Versionen stehen als Block am Kopf des Skripts und werden einmal pro
+Semester angefasst. Wiederholbar: ein aktuelles Template meldet ''ok''.
+
+<WRAP center round important 90%>
+''pytest-asyncio'' muss mit ''pytest'' mitziehen — 0.23.8 und pytest 9 lassen
+sich nicht gemeinsam auflösen. Pakete, welche die Lernenden im Rahmen der
+Aufgabe selbst eintragen sollen (Flask in den lu06-Aufgaben), gehören **nicht**
+in die Pin-Liste.
+</WRAP>
+
+===== scripts/publish-wiki.py — diese Seiten aktualisieren =====
+
+Spiegelt den Ordner ''wiki/'' aus dem Repo hierher. Pfad = Seiten-ID:
+''wiki/howto/git/classroom50/start.txt'' wird zu
+''howto:git:classroom50:start''.
+
+<code>
+scripts/publish-wiki.py [--apply] [--summary "Text"]
+</code>
+
+Geschrieben wird nur, was abweicht — ein erneuter Lauf meldet alles als
+''gleich'' und hinterlässt keine leeren Versionen. Zugangsdaten kommen aus der
+Umgebung: ''DOKUWIKI_TOKEN'', sonst ''DOKUWIKI_USER'' und
+''DOKUWIKI_PASSWORD''.
+
+<WRAP center round important 90%>
+Ein untauglicher API-Token wird **nicht abgelehnt, sondern ignoriert** — die
+Aufrufe laufen dann als Gast weiter und scheitern erst beim Schreiben mit einer
+401, die wie ein falsches Passwort aussieht. Das Skript prüft deshalb vor dem
+Schreiben per ''core.whoAmI'', als wer es angemeldet ist, gibt das aus und
+fällt bei totem Token auf die Anmeldung per ''core.login'' zurück.
+</WRAP>
+
 ===== gh teacher — Klassenzimmer verwalten =====
 
 <code bash>
