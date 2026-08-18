@@ -1,0 +1,38 @@
+{
+  "match": "contains",
+  "cases": [
+    {
+      "name": "test_abc",
+      "feedback": [
+        "Test file could not be loaded - ImportError:",
+        "cannot import name 'hello'",
+        "example_empty_file"
+      ],
+      "expected": "",
+      "actual": "",
+      "points": 0
+    },
+    {
+      "name": "test_dummy",
+      "feedback": [
+        "Test file could not be loaded - ImportError:",
+        "cannot import name 'hello'",
+        "example_empty_file"
+      ],
+      "expected": "",
+      "actual": "",
+      "points": 0
+    },
+    {
+      "name": "test_hello",
+      "feedback": [
+        "Test file could not be loaded - ImportError:",
+        "cannot import name 'hello'",
+        "example_empty_file"
+      ],
+      "expected": "",
+      "actual": "",
+      "points": 0
+    }
+  ]
+}

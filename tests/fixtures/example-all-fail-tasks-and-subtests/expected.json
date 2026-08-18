@@ -1,0 +1,25 @@
+{
+  "cases": [
+    {
+      "name": "test_abc",
+      "feedback": "Test failed - AssertionError: 'Goodbye!' != ('Hello, World!', 'frog') : Expected: ('Hello, World!', 'frog') but got something else instead.",
+      "expected": "",
+      "actual": "",
+      "points": 0
+    },
+    {
+      "name": "test_dummy",
+      "feedback": "Test failed - AssertionError: 'Goodbye!' != ('Hello, World!', 'frog') : Expected: ('Hello, World!', 'frog') but got something else instead.",
+      "expected": "",
+      "actual": "",
+      "points": 0
+    },
+    {
+      "name": "test_hello",
+      "feedback": "Test failed - AssertionError: 'Goodbye!' != ('Hello, World!', 15) : Expected: ('Hello, World!', 15) but got something else instead.",
+      "expected": "",
+      "actual": "",
+      "points": 0
+    }
+  ]
+}

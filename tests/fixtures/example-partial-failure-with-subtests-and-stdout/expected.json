@@ -1,0 +1,25 @@
+{
+  "cases": [
+    {
+      "name": "test_fail_safe_with_output_truncation",
+      "feedback": "Test failed - AssertionError: None != 'LOW' : Expected LOW but returned None with T=10, neutrons=399, threshold=10000",
+      "expected": "",
+      "actual": "",
+      "points": 0
+    },
+    {
+      "name": "test_is_criticality_balanced_with_passes",
+      "feedback": "Success",
+      "expected": "",
+      "actual": "",
+      "points": 2
+    },
+    {
+      "name": "test_reactor_efficiency_with_some_subtest_output",
+      "feedback": "Test failed - AssertionError: None != 'green' : Expected green as a result, but calling reactor_efficiency(voltage=10, current=1000, theoretical_max_power=10000) returned None",
+      "expected": "",
+      "actual": "",
+      "points": 0
+    }
+  ]
+}

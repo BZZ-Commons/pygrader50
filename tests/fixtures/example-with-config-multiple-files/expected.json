@@ -1,0 +1,25 @@
+{
+  "cases": [
+    {
+      "name": "test_abc",
+      "feedback": "Success",
+      "expected": "",
+      "actual": "",
+      "points": 2
+    },
+    {
+      "name": "test_dummy",
+      "feedback": "Success",
+      "expected": "",
+      "actual": "",
+      "points": 2
+    },
+    {
+      "name": "test_hello",
+      "feedback": "Success",
+      "expected": "",
+      "actual": "",
+      "points": 2
+    }
+  ]
+}

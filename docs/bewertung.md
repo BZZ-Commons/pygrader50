@@ -118,9 +118,9 @@ Was sonst noch ins Template gehört: [Aufgaben-Template](template.md).
 ### classroom50 autograde: 0/7
 
 ## Unittests
-| name     | feedback        | expected | actual | points | max |
-| -------- | --------------- | -------- | ------ | ------ | --- |
-| test_ggt | Assertion Error | 8        | None   | 0      | 2   |
+| name     | feedback                          | expected | actual | points | max |
+| -------- | --------------------------------- | -------- | ------ | ------ | --- |
+| test_ggt | Assertion Error (main_test.py:5)  | 8        | None   | 0      | 2   |
 
 **0.00/2.00 Points (0.00%)**
 ```
@@ -131,6 +131,34 @@ hängt. Der Hook zeichnet die beiden verglichenen Werte nur auf und überlässt 
 Darstellung pytest — im Actions-Log steht also weiterhin der gewohnte
 pytest-Diff. Ins Checkout wird dafür nichts geschrieben; eine eigene
 `conftest.py` im Repo bleibt unangetastet.
+
+Der Klammerzusatz nennt die Zeile, in der die Prüfung gescheitert ist — bei drei
+`assert` in einer Testfunktion ist das der Unterschied zwischen «irgendwas
+stimmt nicht» und einer konkreten Stelle. Bei einem anderen Vergleichsoperator
+als `==` steht er in *expected* mit dabei (`!= 5`), sonst würde die Tabelle bei
+einem gescheiterten `assert a != b` behaupten, erwartet und tatsächlich seien
+dasselbe.
+
+### Was sonst in der Spalte stehen kann
+
+| Lage | feedback |
+|---|---|
+| Test bestanden | `Success` |
+| erwartetes Scheitern (`@pytest.mark.xfail`) | `Success: Fails as expected` |
+| Ausnahme im Studi-Code | `Test failed - ValueError: ...` |
+| Zeitlimit erreicht | `Test failed - Failed: Timeout >10.0s` |
+| Datei lädt nicht (Syntaxfehler, fehlende Funktion, leere Datei) | `Test file could not be loaded - SyntaxError: expected ':' (main.py, line 3)` |
+| Test übersprungen | `Test was skipped at this time - <Grund>` |
+| Testname aus `unittests.json` gibt es nicht | `This test was not executed, maybe the name was wrong?` |
+
+Die dritte Zeile von unten ist der häufigste Anfängerzustand überhaupt: Die
+Lösung hat einen Tippfehler, das Testfile kann sie nicht importieren, und
+**kein einziger** Test läuft. Wenn ein Template seinen Import in ein
+`try/except ImportError` legt und dort eine eigene Meldung wirft, steht diese
+Meldung in der Tabelle — der direkteste Weg, eine Klasse gezielt zu lenken.
+
+Was die Lernenden mit `print()` ausgeben, steht im Actions-Log unter dem
+gescheiterten Test unter *Output of your program:*, gekappt bei 500 Zeichen.
 
 ## Ein Bundle anlegen
 

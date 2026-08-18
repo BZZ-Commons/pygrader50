@@ -1,0 +1,11 @@
+{
+  "cases": [
+    {
+      "name": "test_say_hi",
+      "feedback": "Test file could not be loaded - ImportError: MISSING FUNCTION --> In your 'hello_world.py' file, we can not find or import the function named 'hello_world()'. The tests for this first exercise expect a function that returns the string \"Hello, World!\" Did you use print(\"Hello, World!\") instead?",
+      "expected": "",
+      "actual": "",
+      "points": 0
+    }
+  ]
+}

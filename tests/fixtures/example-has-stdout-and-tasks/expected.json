@@ -1,0 +1,32 @@
+{
+  "cases": [
+    {
+      "name": "test_abc",
+      "feedback": "Test failed - AssertionError: None != 'Hello, World!'",
+      "expected": "",
+      "actual": "",
+      "points": 0
+    },
+    {
+      "name": "test_dummy",
+      "feedback": "Test failed - AssertionError: None != 'Hello, World!'",
+      "expected": "",
+      "actual": "",
+      "points": 0
+    },
+    {
+      "name": "test_hello",
+      "feedback": "Test failed - AssertionError: None != 'Hello, World!'",
+      "expected": "",
+      "actual": "",
+      "points": 0
+    },
+    {
+      "name": "test_truncation",
+      "feedback": "Test failed - AssertionError: 'Goodbye!' != 'Hello, World!'",
+      "expected": "",
+      "actual": "",
+      "points": 0
+    }
+  ]
+}

@@ -48,7 +48,9 @@ def run_case(workspace: pathlib.Path, source: str, *,
     )
     assert output.is_file(), completed.stderr
     section = json.loads(output.read_text(encoding='UTF-8'))
-    return section['feedback'][0]
+    entry = dict(section['feedback'][0])
+    entry['console'] = completed.stdout
+    return entry
 
 
 def test_a_passing_test_scores_the_full_points(tmp_path):
@@ -62,7 +64,7 @@ def test_a_failed_comparison_reports_both_values(tmp_path):
     """The columns the students actually read, without the conftest.py copy."""
     entry = run_case(tmp_path, 'def test_case():\n    assert None == 8\n')
 
-    assert entry['feedback'] == 'Assertion Error'
+    assert entry['feedback'] == 'Assertion Error (case_test.py:2)'
     assert (entry['expected'], entry['actual']) == ('8', 'None')
     assert entry['points'] == 0
 
@@ -81,7 +83,7 @@ def test_a_skipped_test_scores_nothing(tmp_path):
         'import pytest\n\n\ndef test_case():\n    pytest.skip("später")\n',
     )
 
-    assert entry['feedback'] == 'Test was skipped at this time'
+    assert entry['feedback'] == 'Test was skipped at this time - später'
     assert entry['points'] == 0
 
 
@@ -125,12 +127,55 @@ def test_a_missing_function_is_reported_as_not_run(tmp_path):
     assert entry['points'] == 0
 
 
-def test_a_broken_test_file_is_not_reported_as_a_wrong_name(tmp_path):
-    """A collection error has no report at all — it must not read as a typo."""
+def test_a_broken_test_file_names_the_syntax_error(tmp_path):
+    """A collection error has no report at all — the exception is the feedback."""
     entry = run_case(tmp_path, 'def test_case(:\n    assert True\n')
 
     assert entry['points'] == 0
-    assert 'Unknown error' in entry['feedback']
+    assert entry['feedback'].startswith('Test file could not be loaded - SyntaxError:')
+    assert 'case_test.py' in entry['feedback']
+
+
+def test_a_missing_name_in_the_solution_is_named(tmp_path):
+    """The most common beginner state: the function is not defined yet."""
+    workspace = tmp_path / 'missing'
+    workspace.mkdir()
+    (workspace / 'solution.py').write_text('"""Leer."""\n', encoding='UTF-8')
+    entry = run_case(
+        workspace,
+        'from solution import ggt\n\n\ndef test_case():\n    assert ggt(4, 2) == 2\n',
+    )
+
+    assert entry['points'] == 0
+    assert "cannot import name 'ggt'" in entry['feedback']
+    assert str(workspace) not in entry['feedback']
+
+
+def test_a_failed_inequality_shows_the_operator(tmp_path):
+    """Bare values would claim expected 5, actual 5 on a failed `!=`."""
+    entry = run_case(tmp_path, 'def test_case():\n    assert 5 != 5\n')
+
+    assert (entry['expected'], entry['actual']) == ('!= 5', '5')
+
+
+def test_the_students_own_output_is_echoed(tmp_path):
+    entry = run_case(
+        tmp_path,
+        'def test_case():\n    print("zwischenwert 42")\n    assert None == 8\n',
+    )
+
+    assert 'Output of your program:' in entry['console']
+    assert 'zwischenwert 42' in entry['console']
+
+
+def test_long_output_is_truncated(tmp_path):
+    entry = run_case(
+        tmp_path,
+        'def test_case():\n    print("x" * 2000)\n    assert None == 8\n',
+    )
+
+    assert 'truncated at 500 characters' in entry['console']
+    assert 'x' * 600 not in entry['console']
 
 
 def test_a_broken_fixture_is_reported_as_an_error(tmp_path):

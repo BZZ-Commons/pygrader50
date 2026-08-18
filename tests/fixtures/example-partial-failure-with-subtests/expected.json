@@ -1,0 +1,25 @@
+{
+  "cases": [
+    {
+      "name": "test_abc",
+      "feedback": "Success",
+      "expected": "",
+      "actual": "",
+      "points": 2
+    },
+    {
+      "name": "test_dummy",
+      "feedback": "Success",
+      "expected": "",
+      "actual": "",
+      "points": 2
+    },
+    {
+      "name": "test_hello",
+      "feedback": "Test failed - AssertionError: 'Hello, World!' != ('Hello, World!', 1) : Expected: ('Hello, World!', 1) but got something else instead.",
+      "expected": "",
+      "actual": "",
+      "points": 0
+    }
+  ]
+}

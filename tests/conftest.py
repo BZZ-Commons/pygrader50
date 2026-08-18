@@ -8,6 +8,10 @@ sys.path.insert(0, str(SRC))
 
 from pygrader50.env import Identity  # noqa: E402
 
+# The vendored example repositories are graded by the engine, never collected as
+# tests of ours — half of them do not even import.
+collect_ignore_glob = ['fixtures/*']
+
 
 @pytest.fixture
 def identity(tmp_path):

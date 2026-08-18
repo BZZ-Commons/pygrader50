@@ -130,7 +130,7 @@ def test_stub_feedback_shows_the_compared_values(tmp_path):
     grade(workspace)
     body = (workspace / 'release-body.md').read_text()
 
-    assert '| test_ggt | Assertion Error | 8 | None | 0 | 2 |' in body
+    assert '| test_ggt | Assertion Error (main_test.py:5) | 8 | None | 0 | 2 |' in body
     assert not (workspace / 'conftest.py').exists()
 
 
