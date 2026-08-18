@@ -126,10 +126,11 @@ Was sonst noch ins Template gehört: [Aufgaben-Template](template.md).
 ```
 
 Die Spalten *expected* und *actual* stammen aus dem pytest-Hook
-`pytest_assertrepr_compare`, den pygrader50 vor dem Lauf als `conftest.py` ins
-Checkout kopiert. Eine vorhandene `conftest.py` im Wurzelverzeichnis wird dabei
-überschrieben — der Hook ist die Grundlage der Feedback-Tabelle und gehört nicht
-zur Aufgabe.
+`pytest_assertrepr_compare`, den pygrader50 als Plugin-Objekt an den Testlauf
+hängt. Der Hook zeichnet die beiden verglichenen Werte nur auf und überlässt die
+Darstellung pytest — im Actions-Log steht also weiterhin der gewohnte
+pytest-Diff. Ins Checkout wird dafür nichts geschrieben; eine eigene
+`conftest.py` im Repo bleibt unangetastet.
 
 ## Ein Bundle anlegen
 

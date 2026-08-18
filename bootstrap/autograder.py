@@ -18,6 +18,9 @@ https://github.com/BZZ-Commons/pygrader50
 import subprocess
 import sys
 
+# Deliberately behind pyproject.toml: this line is the rollout gate. A tag here
+# reaches every student on the next push, so it moves between assignments, never
+# in the middle of one.
 VERSION = 'v2.1.2'
 PACKAGE = f'pygrader50 @ git+https://github.com/BZZ-Commons/pygrader50@{VERSION}'
 

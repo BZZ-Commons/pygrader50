@@ -14,26 +14,13 @@ submission is still recorded.
 
 from __future__ import annotations
 
-import shutil
 import sys
 import traceback
-from importlib import resources
 
 from . import config as config_module
 from . import pylint_runner, pytest_runner, render, result
 from .console import bcolors, error as console_error, info, section, warn
 from .env import Identity, MissingEnvironment
-
-
-def install_conftest(workspace) -> None:
-    """Drop our assertion hook into the checkout so failures report values.
-
-    Overwrites any conftest.py in the repository root: the hook is what the
-    feedback table depends on, and the file is not part of the student's task.
-    """
-    source = resources.files('pygrader50.data').joinpath('conftest.py')
-    with resources.as_file(source) as path:
-        shutil.copyfile(path, workspace / 'conftest.py')
 
 
 def grade(identity: Identity) -> int:
@@ -54,7 +41,6 @@ def grade(identity: Identity) -> int:
 
     sections = []
     if grading.has_unittests:
-        install_conftest(identity.workspace)
         sections.append(pytest_runner.run(grading.cases))
     if grading.has_lint:
         sections.append(pylint_runner.run(grading.lint, grading.pylintrc))

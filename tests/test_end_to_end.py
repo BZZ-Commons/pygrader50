@@ -123,6 +123,17 @@ def test_stub_fails_the_unittest_but_still_records(tmp_path):
     assert entry['passed'] is False and entry['score'] == 0
 
 
+def test_stub_feedback_shows_the_compared_values(tmp_path):
+    """Expected/actual reach the table without a conftest.py in the checkout."""
+    workspace = build_repo(tmp_path / 'values', STUB)
+
+    grade(workspace)
+    body = (workspace / 'release-body.md').read_text()
+
+    assert '| test_ggt | Assertion Error | 8 | None | 0 | 2 |' in body
+    assert not (workspace / 'conftest.py').exists()
+
+
 def test_bundle_configuration_takes_precedence(tmp_path):
     """The teacher's bundle overrides a student-edited unittests.json."""
     workspace = build_repo(tmp_path / 'tampered', SOLUTION)

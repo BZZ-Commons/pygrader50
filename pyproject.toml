@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pygrader50"
-version = "2.1.2"
+version = "2.2.0"
 description = "Autograder engine (pytest + pylint) for Classroom 50"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -32,9 +32,6 @@ pygrader50 = "pygrader50.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.setuptools.package-data]
-pygrader50 = ["data/*.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
