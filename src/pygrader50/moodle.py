@@ -32,7 +32,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 
-from .console import bcolors, fail, info, section, warn
+from .console import error as console_error, fail, info, ok as console_ok, section, warn
 
 DEFAULT_FUNCTION = 'mod_externalassignment_update_grade'
 STATE_SCHEMA = 'pygrader50/moodle-state/v1'
@@ -48,7 +48,6 @@ class Submission:  # pylint: disable=too-many-instance-attributes
     score: int
     max_score: int
     submission: str
-    repository: str
     release_url: str
     submitted_at: str
     late: bool
@@ -57,6 +56,11 @@ class Submission:  # pylint: disable=too-many-instance-attributes
     def key(self) -> str:
         """Stabiler Schlüssel für das Zustandsfile."""
         return f'{self.assignment}/{self.owner}'
+
+    @property
+    def repository(self) -> str:
+        """`owner/repo` der Abgabe, aus der Release-URL abgeleitet."""
+        return repository_from_url(self.release_url)
 
 
 @dataclass
@@ -138,9 +142,6 @@ def latest_submissions(scores: dict, *, assignment: str | None = None,
                     score=int(newest.get('score') or 0),
                     max_score=int(newest.get('max-score') or 0),
                     submission=newest.get('submission') or '',
-                    repository=repository_from_url(
-                        newest.get('release') or newest.get('commit') or ''
-                    ),
                     release_url=newest.get('release') or newest.get('commit') or '',
                     submitted_at=newest.get('datetime') or '',
                     late=bool(newest.get('late')),
@@ -260,18 +261,17 @@ def sync(  # pylint: disable=too-many-arguments
             failed += 1
             continue
 
-        payload = build_payload(submission, feedback_provider(submission))
         if dry_run:
             info(f'[dry-run] {label}: {submission.score}/{submission.max_score}')
             sent += 1
             continue
 
+        payload = build_payload(submission, feedback_provider(submission))
         ok, message = sender(payload)
         if ok:
             state.record(submission)
             sent += 1
-            print(f'{bcolors.OKGREEN}✅ {label}: '
-                  f'{submission.score}/{submission.max_score}{bcolors.ENDC}')
+            console_ok(f'✅ {label}: {submission.score}/{submission.max_score}')
         else:
             failed += 1
             fail(f'❌ {label}: {message}')
@@ -303,7 +303,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
     if not args.scores.is_file():
-        print(f'::error::{args.scores} nicht gefunden', file=sys.stderr)
+        console_error(f'{args.scores} nicht gefunden')
         return 1
 
     base_url = os.environ.get('MOODLE_URL', '').strip()
@@ -315,7 +315,7 @@ def main(argv: list[str] | None = None) -> int:
     # `wsfunction` mit `invalidparameter` / "Missing function name".
     function = os.environ.get('MOODLE_FUNCTION', '').strip() or DEFAULT_FUNCTION
     if not args.dry_run and not (base_url and token):
-        print('::error::MOODLE_URL und MOODLE_TOKEN müssen gesetzt sein', file=sys.stderr)
+        console_error('MOODLE_URL und MOODLE_TOKEN müssen gesetzt sein')
         return 1
 
     try:
@@ -325,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
             owner=args.user,
         )
     except ValueError as exc:
-        print(f'::error::{exc}', file=sys.stderr)
+        console_error(exc)
         return 1
 
     section(f'Moodle-Übertrag: {len(submissions)} Abgaben')

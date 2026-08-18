@@ -38,12 +38,18 @@ Requires `gh` on PATH and authenticated.
 from __future__ import annotations
 
 import ast
-import base64
 import json
+import pathlib
 import re
-import subprocess
 import sys
+import urllib.error
 import urllib.request
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _gh import (  # noqa: E402  pylint: disable=wrong-import-position
+    GitHubError, assignments_of, fetch_raw, parse_args, put_file, report,
+)
 
 WIKI = 'https://wiki.bzz.ch'
 # Where the link goes when lint.json names no file, and the file preferred when
@@ -64,80 +70,48 @@ CODE_RE = re.compile(r'^\s*(LU\d\d)\.(A\d\d)\s*-\s*(.*)$', re.I)
 SLUG_RE = re.compile(r'^(?P<module>[a-z0-9]+)-(?P<lu>lu\d\d)-(?P<nr>a\d\d)-')
 
 
-def gh_run(args: list[str], stdin: str | None = None) -> tuple[int, str]:
-    """Run `gh` and return (returncode, stdout)."""
-    proc = subprocess.run(
-        ['gh', *args], input=stdin, capture_output=True, text=True, check=False
-    )
-    return proc.returncode, proc.stdout
-
-
-def fetch_raw(repo: str, path: str) -> str | None:
-    """File contents, or None when the file does not exist."""
-    code, out = gh_run(
-        ['api', f'repos/{repo}/contents/{path}', '-H', 'Accept: application/vnd.github.raw']
-    )
-    return out if code == 0 else None
-
-
-def fetch_sha(repo: str, path: str) -> str | None:
-    """Blob SHA, or None when the file does not exist."""
-    code, out = gh_run(['api', f'repos/{repo}/contents/{path}', '--jq', '.sha'])
-    return out.strip() if code == 0 and out.strip() else None
-
-
-def put_file(repo: str, path: str, content: str, message: str) -> bool:
-    """Create or update `path`. Returns True on success."""
-    args = [
-        'api', '-X', 'PUT', f'repos/{repo}/contents/{path}',
-        '-f', f'message={message}',
-        '-f', f'content={base64.b64encode(content.encode()).decode()}',
-    ]
-    sha = fetch_sha(repo, path)
-    if sha:
-        args += ['-f', f'sha={sha}']
-    code, _ = gh_run(args)
-    return code == 0
+class WikiError(RuntimeError):
+    """The wiki could not be read."""
 
 
 def http_get(url: str) -> str:
-    """Fetch `url` as text."""
-    with urllib.request.urlopen(url, timeout=30) as response:
-        return response.read().decode('utf-8', 'replace')
+    """Fetch `url` as text, or raise WikiError.
+
+    Raising rather than letting urllib escape keeps one slow or missing page
+    from aborting an --apply run half-way, with no tally of what was written.
+    """
+    try:
+        with urllib.request.urlopen(url, timeout=30) as response:
+            return response.read().decode('utf-8', 'replace')
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise WikiError(f'{url}: {exc}') from exc
 
 
-def wiki_pages(module: str, lu: str) -> dict[str, str]:
-    """Map of `LUxx.Ayy` -> page id for one learning unit's exercises.
+def wiki_pages(module: str, lu: str) -> dict[str, list[tuple[str, str]]]:
+    """Map of `LUxx.Ayy` -> [(page id, title)] for one learning unit's exercises.
 
     The page ids come from the links the learning unit's start page renders,
-    the codes from each page's own heading — a page whose heading carries no
-    code is not an exercise and drops out here.
+    the codes and titles from each page's own heading — a page whose heading
+    carries no code is not an exercise and drops out here.
+
+    A code with more than one entry is ambiguous; the caller decides what to do
+    about it. Keeping the list (rather than collapsing it to a sentinel) also
+    keeps the title, so nothing has to be fetched twice.
     """
     namespace = f'modul/{module}/learningunits/{lu}'
     html = http_get(f'{WIKI}/{namespace}/start')
     names = sorted(set(re.findall(
         rf'href="{re.escape(WIKI)}/{re.escape(namespace)}/aufgaben/([^"?#]+)"', html
     )))
-    pages: dict[str, list[str]] = {}
+    pages: dict[str, list[tuple[str, str]]] = {}
     for name in names:
         heading = HEADING_RE.search(http_get(f'{WIKI}/_export/raw/{namespace}/aufgaben/{name}'))
         match = CODE_RE.match(heading.group(1)) if heading else None
         if match:
             code = f'{match.group(1)}.{match.group(2)}'.lower()
-            pages.setdefault(code, []).append(f'{lu}/aufgaben/{name}')
-    return {code: ids[0] if len(ids) == 1 else '' for code, ids in pages.items()}
-
-
-def wiki_title(module: str, page: str) -> str:
-    """The exercise title of `page`, with its `LUxx.Ayy` code stripped off."""
-    heading = HEADING_RE.search(
-        http_get(f'{WIKI}/_export/raw/modul/{module}/learningunits/{page}')
-    )
-    text = heading.group(1) if heading else ''
-    match = CODE_RE.match(text)
-    if match:
-        text = match.group(3)
-    return ' '.join(text.split())
+            title = ' '.join(match.group(3).split())
+            pages.setdefault(code, []).append((f'{lu}/aufgaben/{name}', title))
+    return pages
 
 
 def docstring_for(title: str, module: str, page: str) -> str:
@@ -166,6 +140,9 @@ def with_docstring(source: str, docstring: str) -> str | None:
     already broken file worse. Only the case where a docstring may be there but
     cannot be located is left alone — that would risk two of them.
     """
+    # A BOM would sit before the docstring and stop the file from compiling; it
+    # is put back untouched at the very front.
+    bom, source = ('\ufeff', source[1:]) if source.startswith('\ufeff') else ('', source)
     lines = source.splitlines()
     try:
         body = ast.parse(source).body
@@ -176,8 +153,13 @@ def with_docstring(source: str, docstring: str) -> str | None:
 
     if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) \
             and isinstance(body[0].value.value, str):
-        head = lines[:body[0].lineno - 1]
-        tail = lines[body[0].end_lineno:]
+        node = body[0]
+        head = lines[:node.lineno - 1]
+        # Code can share the docstring's closing line; slicing whole lines
+        # away would delete it silently.
+        rest = lines[node.end_lineno - 1][node.end_col_offset:].lstrip()
+        rest = rest[1:].lstrip() if rest.startswith(';') else rest
+        tail = ([rest] if rest else []) + lines[node.end_lineno:]
     else:
         # No docstring yet: keep a shebang first, then the docstring, then a
         # blank line before whatever the file started with.
@@ -185,7 +167,7 @@ def with_docstring(source: str, docstring: str) -> str | None:
         rest = lines[len(head):]
         tail = ([''] if rest and rest[0].strip() else []) + rest
 
-    return '\n'.join(head + docstring.splitlines() + tail).rstrip('\n') + '\n'
+    return bom + '\n'.join(head + docstring.splitlines() + tail).rstrip('\n') + '\n'
 
 
 def entrypoint_of(repo: str) -> str:
@@ -205,27 +187,24 @@ def entrypoint_of(repo: str) -> str:
     return ENTRYPOINT if ENTRYPOINT in files else files[0]
 
 
-def assignments_of(org: str, classroom: str) -> list[dict]:
-    """The classroom's assignments, as assignments.json lists them."""
-    code, out = gh_run([
-        'api', f'repos/{org}/classroom50/contents/{classroom}/assignments.json',
-        '-H', 'Accept: application/vnd.github.raw',
-    ])
-    if code != 0:
-        sys.exit(f'could not read {classroom}/assignments.json from {org}/classroom50')
-    return json.loads(out)['assignments']
-
-
-def page_for(slug: str, pages: dict[str, str], lu: str, nr: str) -> tuple[str, str]:
-    """(page id, reason it is missing) for one assignment."""
+def page_for(
+    slug: str, pages: dict[str, list[tuple[str, str]]], lu: str, nr: str
+) -> tuple[str, str, str]:
+    """(page id, title, reason it is missing) for one assignment."""
     if slug in OVERRIDES:
-        return OVERRIDES[slug], ''
+        page = OVERRIDES[slug]
+        title = next((t for entries in pages.values() for pid, t in entries if pid == page), '')
+        if not title:
+            return '', '', f'override page {page} carries no exercise heading'
+        return page, title, ''
     code = f'{lu}.{nr}'
-    if code not in pages:
-        return '', f'no wiki page carries {code.upper()}'
-    if not pages[code]:
-        return '', f'several wiki pages carry {code.upper()}'
-    return pages[code], ''
+    entries = pages.get(code)
+    if not entries:
+        return '', '', f'no wiki page carries {code.upper()}'
+    if len(entries) != 1:
+        return '', '', f'several wiki pages carry {code.upper()}'
+    page, title = entries[0]
+    return page, title, ''
 
 
 COMMIT_MESSAGE = (
@@ -235,6 +214,14 @@ COMMIT_MESSAGE = (
     'It also answers the missing-module-docstring every template was losing '
     'lint points to.'
 )
+
+
+def _page_of(slug: str, parts: re.Match, catalogue: dict) -> tuple[str, str, str]:
+    """(page id, title, reason it is missing), filling the LU catalogue on demand."""
+    module, lu, nr = parts.group('module'), parts.group('lu'), parts.group('nr')
+    if (module, lu) not in catalogue:
+        catalogue[(module, lu)] = wiki_pages(module, lu)
+    return page_for(slug, catalogue[(module, lu)], lu, nr)
 
 
 def process(  # pylint: disable=too-many-return-statements
@@ -251,52 +238,70 @@ def process(  # pylint: disable=too-many-return-statements
     if not parts:
         return 'skipped', f'SKIP     {repo}  (slug does not name a learning unit)'
 
-    module, lu, nr = parts.group('module'), parts.group('lu'), parts.group('nr')
-    if (module, lu) not in catalogue:
-        catalogue[(module, lu)] = wiki_pages(module, lu)
-    page, why = page_for(slug, catalogue[(module, lu)], lu, nr)
-    if not page:
-        return 'skipped', f'SKIP     {repo}  ({why})'
+    try:
+        page, title, why = _page_of(slug, parts, catalogue)
+        if not page:
+            return 'skipped', f'SKIP     {repo}  ({why})'
 
-    entrypoint = entrypoint_of(repo)
-    source = fetch_raw(repo, entrypoint)
+        entrypoint = entrypoint_of(repo)
+        source = fetch_raw(repo, entrypoint)
+    except (WikiError, GitHubError) as exc:
+        return 'failed', f'FAILED   {repo}  ({exc})'
     if source is None:
         return 'skipped', f'SKIP     {repo}  (no {entrypoint})'
 
-    wanted = with_docstring(source, docstring_for(wiki_title(module, page), module, page))
+    wanted = with_docstring(source, docstring_for(title, parts.group('module'), page))
     if wanted is None:
         return 'skipped', f'SKIP     {repo}  ({entrypoint} already opens with a string)'
     if wanted == source:
         return 'unchanged', f'ok       {repo}'
     if not apply:
         return 'changed', f'would    {repo}  {entrypoint} -> {page}'
-    if put_file(repo, entrypoint, wanted, COMMIT_MESSAGE):
+    error = put_file(repo, entrypoint, wanted, COMMIT_MESSAGE)
+    if not error:
         return 'changed', f'written  {repo}  {entrypoint} -> {page}'
-    return 'failed', f'FAILED   {repo}'
+    return 'failed', f'FAILED   {repo}  ({error})'
+
+
+def _one_per_template(assignments: list[dict], tally: dict[str, int]):
+    """Yield assignments, skipping any whose template repo was handled already.
+
+    Two assignments can share one template. Writing it twice would commit the
+    second assignment's link over the first and double-count the tally.
+    """
+    seen: set[str] = set()
+    for assignment in assignments:
+        template = assignment.get('template') or {}
+        repo = f"{template.get('owner')}/{template.get('repo')}"
+        if repo in seen:
+            tally['skipped'] += 1
+            print(f'SKIP     {repo}  (template already handled)')
+            continue
+        seen.add(repo)
+        yield assignment
 
 
 def main() -> int:
     """Walk every template and put the assignment link in its main.py."""
-    if len(sys.argv) < 3:
-        print(f'usage: {sys.argv[0]} <org> <classroom> [--apply]', file=sys.stderr)
-        print(f'example: {sys.argv[0]} m323-ix24 m323-ix24 --apply', file=sys.stderr)
-        return 2
-    org, classroom, apply = sys.argv[1], sys.argv[2], '--apply' in sys.argv[3:]
+    org, classroom, apply = parse_args(
+        sys.argv,
+        f'usage: {sys.argv[0]} <org> <classroom> [--apply]\n'
+        f'example: {sys.argv[0]} <org> <classroom> --apply',
+    )
 
     assignments = assignments_of(org, classroom)
     print(f'== {len(assignments)} assignments ==')
     if not apply:
         print('(dry run — pass --apply to write)')
 
-    catalogue: dict[tuple[str, str], dict[str, str]] = {}
+    catalogue: dict[tuple[str, str], dict[str, list[tuple[str, str]]]] = {}
     tally = {'changed': 0, 'unchanged': 0, 'skipped': 0, 'failed': 0}
-    for assignment in sorted(assignments, key=lambda a: a['slug']):
+    for assignment in _one_per_template(sorted(assignments, key=lambda a: a['slug']), tally):
         key, line = process(assignment, catalogue, apply)
         tally[key] += 1
         print(line)
 
-    print('== ' + '  '.join(f'{k}: {v}' for k, v in tally.items()) + ' ==')
-    return 1 if tally['failed'] else 0
+    return report(tally)
 
 
 if __name__ == '__main__':

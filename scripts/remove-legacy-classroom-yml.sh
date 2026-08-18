@@ -64,9 +64,10 @@ echo "total targets: $(wc -l < "$TARGETS" | tr -d ' ')"
 deleted=0; absent=0; failed=0
 while read -r repo; do
   [ -n "$repo" ] || continue
-  # Probe by exit code, not by output: on 404 `gh api --jq` prints the error
-  # body to stdout, so capturing it would make every missing file look present.
-  if ! gh api "repos/$repo/contents/$FILE" >/dev/null 2>&1; then
+  # One call answers both "is it there" and "what is its sha". Guard on the
+  # exit code as well as on the output: on 404 `gh api --jq` prints the error
+  # body to stdout, so a non-empty result alone would look like a real sha.
+  if ! sha=$(gh api "repos/$repo/contents/$FILE" --jq '.sha' 2>/dev/null) || [ -z "$sha" ]; then
     echo "absent   $repo"
     absent=$((absent + 1))
     continue
@@ -76,7 +77,6 @@ while read -r repo; do
     deleted=$((deleted + 1))
     continue
   fi
-  sha=$(gh api "repos/$repo/contents/$FILE" --jq '.sha' 2>/dev/null)
   if gh api -X DELETE "repos/$repo/contents/$FILE" \
        -f message="$MSG" -f sha="$sha" --jq '.commit.sha' >/dev/null 2>&1; then
     echo "deleted  $repo"

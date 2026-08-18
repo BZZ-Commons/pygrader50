@@ -3,7 +3,8 @@ import sys
 
 import pytest
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'src'))
+SRC = pathlib.Path(__file__).resolve().parents[1] / 'src'
+sys.path.insert(0, str(SRC))
 
 from pygrader50.env import Identity  # noqa: E402
 
@@ -21,5 +22,4 @@ def identity(tmp_path):
         review_url='https://github.com/o/r/compare/a...b',
         workspace=tmp_path,
         runner_temp=None,
-        github_output=None,
     )

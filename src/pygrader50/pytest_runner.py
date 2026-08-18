@@ -11,7 +11,7 @@ run.
 
 from __future__ import annotations
 
-import sys
+from contextlib import redirect_stdout
 from io import StringIO
 
 import pytest
@@ -22,25 +22,6 @@ from .console import bcolors, points, section
 
 CATEGORY = 'pytest'
 TITLE = 'Unittests'
-
-
-class Capturing(list):
-    """Capture stdout of a block into a list of lines."""
-
-    def __init__(self, *args):
-        super().__init__(*args)
-        self._stdout = None
-        self._stringio = None
-
-    def __enter__(self):
-        self._stdout = sys.stdout
-        sys.stdout = self._stringio = StringIO()
-        return self
-
-    def __exit__(self, *args):
-        self.extend(self._stringio.getvalue().splitlines())
-        del self._stringio
-        sys.stdout = self._stdout
 
 
 def run(cases: list[Testcase]) -> dict:
@@ -62,35 +43,46 @@ def run(cases: list[Testcase]) -> dict:
             '-q',
         ]
 
-        with Capturing() as output:
+        buffer = StringIO()
+        with redirect_stdout(buffer):
             exitcode = pytest.main(args)
+        output = buffer.getvalue().splitlines()
 
+        status, message = 'error', ''
         if exitcode == ExitCode.OK:
             passed_cases += 1
             summary = output[-1] if output else ''
-            if 'xfailed' in summary:
-                result['feedback'] = 'Success: Fails as expected'
-                result['points'] = case.points
-                _case_header(case.name, number, len(cases), 'passed')
-            elif 'skipped' in summary:
+            if 'skipped' in summary:
+                status = 'skipped'
                 result['feedback'] = 'Test was skipped at this time'
-                _case_header(case.name, number, len(cases), 'skipped')
             else:
-                result['feedback'] = 'Success'
+                status = 'passed'
+                result['feedback'] = (
+                    'Success: Fails as expected' if 'xfailed' in summary else 'Success'
+                )
                 result['points'] = case.points
-                _case_header(case.name, number, len(cases), 'passed')
         elif exitcode == ExitCode.TESTS_FAILED:
-            _case_header(case.name, number, len(cases), 'failed')
-            message = _error_message(output, result)
-            if message:
-                print(f'{bcolors.FAIL}{message}{bcolors.ENDC}')
+            status = 'failed'
+            details = _assertion_details(output)
+            if details is None:
+                result['feedback'] = _failure_summary(output)
+                message = _failure_lines(output)
+            else:
+                result.update(details)
+                message = (
+                    f'Expected :\t {details["expected"]}\n'
+                    f'Actual :\t {details["actual"]}\n'
+                )
         elif exitcode == ExitCode.NO_TESTS_COLLECTED:
+            status = 'not_run'
             result['feedback'] = 'This test was not executed, maybe the name was wrong?'
-            _case_header(case.name, number, len(cases), 'not_run')
         else:
             result['feedback'] = f'Unknown error "{exitcode}", check GitHub Actions for details'
-            _case_header(case.name, number, len(cases), 'error')
-            print(f'{bcolors.FAIL}{output}{bcolors.ENDC}')
+            message = str(output)
+
+        _case_header(case.name, number, len(cases), status)
+        if message:
+            print(f'{bcolors.FAIL}{message}{bcolors.ENDC}')
 
         results['points'] += result['points']
         results['max'] += result['max']
@@ -127,35 +119,44 @@ def _case_header(test_name: str, current: int, total: int, status: str) -> None:
     section(f'{icon} {message}: {test_name} {current}/{total}', color=color)
 
 
-def _error_message(output: list[str], result: dict) -> str:
-    """Pull the assertion details out of the captured pytest output."""
-    message = ''
-    try:
-        comparison = next((line for line in output if 'Comparing values:' in line), None)
-        if comparison:
-            index = output.index(comparison)
-            result['feedback'] = 'Assertion Error'
-            result['expected'] = (
-                output[index + 1].split(':', 1)[1].strip() if index + 1 < len(output) else 'N/A'
-            )
-            result['actual'] = (
-                output[index + 2].split(':', 1)[1].strip() if index + 2 < len(output) else 'N/A'
-            )
-            message += f'Expected :\t {result["expected"]}\n'
-            message += f'Actual :\t {result["actual"]}\n'
-            return message
+def _assertion_details(output: list[str]) -> dict | None:
+    """Expected and actual value from the comparison hook, or None if absent.
 
-        for line in output:
-            if len(line) > 1 and line[0] == 'E' and not line[1].isalpha():
-                stripped = line[1:].strip()
-                if stripped and stripped[0] != '[':
-                    message += f'{stripped}\n'
-        try:
-            details = output[-2].split('-')[1].strip()
-            result['feedback'] = f'Test failed - {details}'
-        except (IndexError, ValueError):
-            result['feedback'] = 'Test failed, check GitHub Actions for more details.'
-    except Exception:  # pylint: disable=broad-except
-        result['feedback'] = 'Test failed, run local pytest for more infos'
-        message = message or 'Test failed, run local pytest for more infos'
-    return message
+    The two lines come from `pytest_assertrepr_compare` in `data/conftest.py`,
+    which is copied into the checkout before the run.
+    """
+    index = next((i for i, line in enumerate(output) if 'Comparing values:' in line), None)
+    if index is None:
+        return None
+    return {
+        'feedback': 'Assertion Error',
+        'expected': _value_at(output, index + 1),
+        'actual': _value_at(output, index + 2),
+    }
+
+
+def _value_at(output: list[str], index: int) -> str:
+    """The value behind the colon on that line, or 'N/A' when it is not there."""
+    if index >= len(output) or ':' not in output[index]:
+        return 'N/A'
+    return output[index].split(':', 1)[1].strip()
+
+
+def _failure_lines(output: list[str]) -> str:
+    """The `E   ...` lines pytest prints for a failure, one per line."""
+    collected = []
+    for line in output:
+        if len(line) > 1 and line[0] == 'E' and not line[1].isalpha():
+            stripped = line[1:].strip()
+            if stripped and stripped[0] != '[':
+                collected.append(stripped)
+    return ''.join(f'{line}\n' for line in collected)
+
+
+def _failure_summary(output: list[str]) -> str:
+    """The short reason from pytest's summary line, or a generic fallback."""
+    if len(output) >= 2 and '-' in output[-2]:
+        details = output[-2].split('-')[1].strip()
+        if details:
+            return f'Test failed - {details}'
+    return 'Test failed, check GitHub Actions for more details.'

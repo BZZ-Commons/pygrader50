@@ -21,7 +21,7 @@ from importlib import resources
 
 from . import config as config_module
 from . import pylint_runner, pytest_runner, render, result
-from .console import bcolors, info, section, warn
+from .console import bcolors, error as console_error, info, section, warn
 from .env import Identity, MissingEnvironment
 
 
@@ -70,7 +70,7 @@ def grade(identity: Identity) -> int:
     if error is not None:
         # Our own bug, not the student's: fail loudly rather than publishing a
         # payload the gradebook would silently drop.
-        print(f'::error::{error}', file=sys.stderr)
+        console_error(error)
         return 1
 
     result.write(identity.workspace, payload, render.release_body(identity, sections, payload))
@@ -87,7 +87,7 @@ def main() -> int:
     try:
         identity = Identity.from_env()
     except MissingEnvironment as exc:
-        print(f'::error::{exc}', file=sys.stderr)
+        console_error(exc)
         return 1
 
     info(
@@ -99,8 +99,7 @@ def main() -> int:
         return grade(identity)
     except Exception:  # pylint: disable=broad-except
         traceback.print_exc()
-        print('::error::pygrader50 crashed while grading — see the traceback above',
-              file=sys.stderr)
+        console_error('pygrader50 crashed while grading — see the traceback above')
         return 1
 
 

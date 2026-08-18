@@ -4,6 +4,8 @@ The Actions log renders ANSI codes, so the console output stays colored while
 `release-body.md` (Markdown) never sees them.
 """
 
+import sys
+
 
 class bcolors:  # pylint: disable=invalid-name,too-few-public-methods
     """ANSI escape codes used across the grader output.
@@ -43,9 +45,19 @@ def warn(message: str) -> None:
     print(f'::warning::{message}')
 
 
+def error(message: str) -> None:
+    """Error that also shows up as an annotation in the Actions UI."""
+    print(f'::error::{message}', file=sys.stderr)
+
+
 def fail(message: str) -> None:
     """Print an error line in red."""
     print(f'{bcolors.FAIL}{message}{bcolors.ENDC}')
+
+
+def ok(message: str) -> None:
+    """Print a success line in green."""
+    print(f'{bcolors.OKGREEN}{bcolors.BOLD}{message}{bcolors.ENDC}')
 
 
 def points(scored: float, maximum: float) -> None:

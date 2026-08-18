@@ -38,7 +38,6 @@ class Identity:  # pylint: disable=too-many-instance-attributes
     review_url: str
     workspace: pathlib.Path
     runner_temp: pathlib.Path | None
-    github_output: str | None
 
     @classmethod
     def from_env(cls, environ: dict[str, str] | None = None) -> 'Identity':
@@ -76,5 +75,4 @@ class Identity:  # pylint: disable=too-many-instance-attributes
             review_url=env.get('REVIEW_URL') or commit_url,
             workspace=pathlib.Path.cwd(),
             runner_temp=pathlib.Path(runner_temp) if runner_temp else None,
-            github_output=env.get('GITHUB_OUTPUT') or None,
         )

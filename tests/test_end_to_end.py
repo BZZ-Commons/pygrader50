@@ -13,7 +13,8 @@ import sys
 
 import pytest
 
-SRC = pathlib.Path(__file__).resolve().parents[1] / 'src'
+from conftest import SRC
+from pygrader50 import config
 
 SOLUTION = '''\
 """Berechnet den groessten gemeinsamen Teiler."""
@@ -130,7 +131,7 @@ def test_bundle_configuration_takes_precedence(tmp_path):
         encoding='UTF-8',
     )
     runner_temp = tmp_path / 'runner-temp'
-    bundle = runner_temp / 'classroom50-runtime' / 'm323-lu01-a02-imperativer-ggt'
+    bundle = runner_temp / config.BUNDLE_SUBDIR / 'm323-lu01-a02-imperativer-ggt'
     bundle.mkdir(parents=True)
     (bundle / 'unittests.json').write_text(json.dumps(UNITTESTS), encoding='UTF-8')
     (bundle / 'lint.json').write_text(json.dumps(LINT), encoding='UTF-8')

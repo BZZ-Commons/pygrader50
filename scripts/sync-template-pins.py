@@ -27,11 +27,15 @@ Requires `gh` on PATH and authenticated.
 
 from __future__ import annotations
 
-import base64
-import json
+import pathlib
 import re
-import subprocess
 import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _gh import (  # noqa: E402  pylint: disable=wrong-import-position
+    GitHubError, fetch_raw, parse_args, put_file, report, template_repos,
+)
 
 # --- update these once per semester ------------------------------------------
 # Every template gets these; a missing one is appended.
@@ -55,42 +59,6 @@ PYTHON_VERSION_FILE = '.python-version'
 # Package name at the start of a requirement line, before any version specifier
 # or extras — `pytest-asyncio == 1.4.0` must NOT read as `pytest`.
 NAME_RE = re.compile(r'^\s*([A-Za-z0-9][A-Za-z0-9._-]*)')
-
-
-def gh_run(args: list[str], stdin: str | None = None) -> tuple[int, str]:
-    """Run `gh` and return (returncode, stdout)."""
-    proc = subprocess.run(
-        ['gh', *args], input=stdin, capture_output=True, text=True, check=False
-    )
-    return proc.returncode, proc.stdout
-
-
-def fetch_raw(repo: str, path: str) -> str | None:
-    """File contents, or None when the file does not exist."""
-    code, out = gh_run(
-        ['api', f'repos/{repo}/contents/{path}', '-H', 'Accept: application/vnd.github.raw']
-    )
-    return out if code == 0 else None
-
-
-def fetch_sha(repo: str, path: str) -> str | None:
-    """Blob SHA, or None when the file does not exist."""
-    code, out = gh_run(['api', f'repos/{repo}/contents/{path}', '--jq', '.sha'])
-    return out.strip() if code == 0 and out.strip() else None
-
-
-def put_file(repo: str, path: str, content: str, message: str) -> bool:
-    """Create or update `path`. Returns True on success."""
-    args = [
-        'api', '-X', 'PUT', f'repos/{repo}/contents/{path}',
-        '-f', f'message={message}',
-        '-f', f'content={base64.b64encode(content.encode()).decode()}',
-    ]
-    sha = fetch_sha(repo, path)
-    if sha:
-        args += ['-f', f'sha={sha}']
-    code, _ = gh_run(args)
-    return code == 0
 
 
 def bump_requirements(text: str) -> str:
@@ -122,26 +90,13 @@ def bump_requirements(text: str) -> str:
     return '\n'.join(out) + '\n'
 
 
-def templates_for(org: str, classroom: str) -> list[str]:
-    """`owner/repo` of every template the classroom's assignments point at."""
-    code, out = gh_run([
-        'api', f'repos/{org}/classroom50/contents/{classroom}/assignments.json',
-        '-H', 'Accept: application/vnd.github.raw',
-    ])
-    if code != 0:
-        sys.exit(f'could not read {classroom}/assignments.json from {org}/classroom50')
-    data = json.loads(out)
-    return sorted({
-        f"{a['template']['owner']}/{a['template']['repo']}" for a in data['assignments']
-    })
-
-
 def pending(repo: str) -> dict[str, str]:
     """Map of path -> wanted content for the files that are out of date."""
     work: dict[str, str] = {}
 
-    wanted = bump_requirements(fetch_raw(repo, REQUIREMENTS) or '')
-    if fetch_raw(repo, REQUIREMENTS) != wanted:
+    current = fetch_raw(repo, REQUIREMENTS) or ''
+    wanted = bump_requirements(current)
+    if current != wanted:
         work[REQUIREMENTS] = wanted
 
     wanted_py = PYTHON_VERSION + '\n'
@@ -164,35 +119,46 @@ def commit_message() -> str:
 
 def main() -> int:
     """Walk every template and bring its pins in line."""
-    if len(sys.argv) < 3:
-        print(f'usage: {sys.argv[0]} <org> <classroom> [--apply]', file=sys.stderr)
-        print(f'example: {sys.argv[0]} m320-ix25 m320-ix25 --apply', file=sys.stderr)
-        return 2
-    org, classroom, apply = sys.argv[1], sys.argv[2], '--apply' in sys.argv[3:]
+    org, classroom, apply = parse_args(
+        sys.argv,
+        f'usage: {sys.argv[0]} <org> <classroom> [--apply]\n'
+        f'example: {sys.argv[0]} <org> <classroom> --apply',
+    )
 
-    repos = templates_for(org, classroom)
+    repos = template_repos(org, classroom)
     print(f'== {len(repos)} templates ==')
     if not apply:
         print('(dry run — pass --apply to write)')
 
+    message = commit_message()
     tally = {'changed': 0, 'unchanged': 0, 'failed': 0}
     for repo in repos:
-        work = pending(repo)
+        try:
+            work = pending(repo)
+        except GitHubError as exc:
+            print(f'FAILED   {repo}  ({exc})')
+            tally['failed'] += 1
+            continue
         if not work:
             print(f'ok       {repo}')
             tally['unchanged'] += 1
-        elif not apply:
+            continue
+        if not apply:
             print(f'would    {repo}  ({", ".join(sorted(work))})')
             tally['changed'] += 1
-        elif all(put_file(repo, p, c, commit_message()) for p, c in work.items()):
+            continue
+        # No short-circuit: a failure on the first file must not skip the second.
+        errors = [err for err in
+                  (put_file(repo, path, content, message) for path, content in work.items())
+                  if err]
+        if errors:
+            print(f'FAILED   {repo}  ({"; ".join(errors)})')
+            tally['failed'] += 1
+        else:
             print(f'written  {repo}  ({", ".join(sorted(work))})')
             tally['changed'] += 1
-        else:
-            print(f'FAILED   {repo}')
-            tally['failed'] += 1
 
-    print('== ' + '  '.join(f'{k}: {v}' for k, v in tally.items()) + ' ==')
-    return 1 if tally['failed'] else 0
+    return report(tally)
 
 
 if __name__ == '__main__':

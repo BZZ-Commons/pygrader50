@@ -34,9 +34,7 @@ def section(result: dict) -> str:
     scored, maximum = result['points'], result['max']
     percent = (scored / maximum * 100) if maximum else 0.0
     parts = [f'## {result["name"]}\n']
-    body = table(result['feedback'])
-    if body:
-        parts.append(body)
+    parts.append(table(result['feedback']))
     parts.append(f'\n**{scored:.2f}/{maximum:.2f} Points ({percent:.2f}%)**\n')
     parts.append('\n---\n')
     return ''.join(parts)

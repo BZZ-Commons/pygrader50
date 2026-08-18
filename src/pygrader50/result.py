@@ -35,29 +35,32 @@ def test_entries(sections: list[dict]) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     for section in sections:
         if section['category'] == 'pytest':
-            for case in section['feedback']:
-                scored = round(case['points'])
-                maximum = round(case['max'])
-                entries.append(
-                    {
-                        'test-name': case['name'],
-                        'passed': scored >= maximum,
-                        'score': scored,
-                        'max-score': maximum,
-                    }
-                )
+            entries.extend(
+                _entry(case['name'], case['points'], case['max'])
+                for case in section['feedback']
+            )
         else:
-            scored = round(section['points'])
-            maximum = round(section['max'])
             entries.append(
-                {
-                    'test-name': section['name'],
-                    'passed': scored > 0,
-                    'score': scored,
-                    'max-score': maximum,
-                }
+                _entry(section['name'], section['points'], section['max'], any_point=True)
             )
     return entries
+
+
+def _entry(name: str, points: float, maximum: float, *, any_point: bool = False) -> dict[str, Any]:
+    """One gradebook entry with the score rounded to the integers it demands.
+
+    `any_point` switches the pass rule from "full marks" to "scored at all" —
+    the lint entry uses it so a convention message costs points without turning
+    the commit status red.
+    """
+    scored = round(points)
+    total = round(maximum)
+    return {
+        'test-name': name,
+        'passed': scored > 0 if any_point else scored >= total,
+        'score': scored,
+        'max-score': total,
+    }
 
 
 def build(identity: Identity, sections: list[dict],
