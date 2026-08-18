@@ -31,6 +31,12 @@ TITLE = 'Unittests'
 # debug prints, short enough to keep the log readable.
 OUTPUT_LIMIT = 500
 
+# How much of pytest's own excerpt around the failure to echo. Longer than the
+# student's output: this is the source line, the values and the frames that led
+# there — the part that answers "why". A runaway recursion still must not turn
+# one case into a megabyte of log.
+DETAIL_LIMIT = 4000
+
 # Fields of a feedback entry that reach the student and must not carry the
 # runner's absolute paths.
 STUDENT_FIELDS = ('feedback', 'expected', 'actual')
@@ -42,6 +48,7 @@ class Outcome(NamedTuple):
     status: str
     result: dict
     message: str
+    detail: str = ''
     output: str = ''
 
 
@@ -159,6 +166,10 @@ def run(cases: list[Testcase]) -> dict:
         _case_header(case.name, number, len(cases), outcome.status)
         if outcome.message:
             fail(outcome.message)
+        if outcome.detail:
+            print(f'{bcolors.OKBLUE}Details from pytest:{bcolors.ENDC}')
+            print(outcome.detail)
+            print()
         if outcome.output:
             print(f'{bcolors.WARNING}Output of your program:{bcolors.ENDC}')
             print(outcome.output)
@@ -186,7 +197,9 @@ def _evaluate(case: Testcase, collector: CaseCollector, exitcode) -> Outcome:
     outcome = _classify(case, collector, exitcode)
     for field in STUDENT_FIELDS:
         outcome.result[field] = _relative(str(outcome.result[field]))
-    return outcome._replace(message=_relative(outcome.message))
+    return outcome._replace(
+        message=_relative(outcome.message), detail=_relative(outcome.detail)
+    )
 
 
 def _classify(case: Testcase, collector: CaseCollector, exitcode) -> Outcome:
@@ -220,7 +233,10 @@ def _without_report(result: dict, collector: CaseCollector, exitcode) -> Outcome
         # hint is the most useful thing the student will read all run.
         reason = _exception_reason(collector.excinfo)
         result['feedback'] = _summary('Test file could not be loaded', _single_line(reason))
-        return Outcome('error', result, reason)
+        # The wrapper pytest raised is the rendered traceback of the import —
+        # useless in a table cell, but exactly what belongs in the log.
+        return Outcome('error', result, reason,
+                       _truncate(str(collector.excinfo.value), DETAIL_LIMIT))
     if exitcode not in (ExitCode.OK, ExitCode.NO_TESTS_COLLECTED):
         result['feedback'] = f'Unknown error "{exitcode}", check GitHub Actions for details'
         return Outcome('error', result, str(exitcode))
@@ -235,7 +251,7 @@ def _phase_error(result: dict, report) -> Outcome:
         f'Error during {report.when}', _first_line(message),
         fallback=f'Error during {report.when}, check GitHub Actions for details',
     )
-    return Outcome('error', result, message, _captured(report))
+    return Outcome('error', result, message, _crash_detail(report), _captured(report))
 
 
 def _skipped(case: Testcase, result: dict, report) -> Outcome:
@@ -274,14 +290,14 @@ def _failed(collector: CaseCollector, result: dict, report) -> Outcome:
             'actual': actual,
         })
         message = f'Expected :\t {expected}\nActual :\t {actual}\n'
-        return Outcome('failed', result, message, _captured(report))
+        return Outcome('failed', result, message, _crash_detail(report), _captured(report))
 
     message = _crash_message(report)
     result['feedback'] = _summary(
         'Test failed', _first_line(message),
         fallback='Test failed, check GitHub Actions for more details.',
     )
-    return Outcome('failed', result, message, _captured(report))
+    return Outcome('failed', result, message, _crash_detail(report), _captured(report))
 
 
 def _initial_result(case: Testcase) -> dict:
@@ -335,6 +351,15 @@ def _reprcrash(report):
     return getattr(report.longrepr, 'reprcrash', None)
 
 
+def _crash_detail(report) -> str:
+    """pytest's own excerpt around the failure: source line, values, frames.
+
+    This is what the terminal report used to carry and nobody could read — the
+    whole run went into a buffer the grader parsed for a verdict and dropped.
+    """
+    return _truncate(str(report.longrepr or ''), DETAIL_LIMIT)
+
+
 def _crash_message(report) -> str:
     """The reason pytest recorded for a crash, or the whole representation."""
     crash = _reprcrash(report)
@@ -368,10 +393,14 @@ def _captured(report) -> str:
     rebuilds the whole capture on every access, so it is read once — a print in
     a loop is exactly the bug this exists for.
     """
-    raw = getattr(report, 'capstdout', '')
-    if len(raw) > OUTPUT_LIMIT:
-        return f'{raw[:OUTPUT_LIMIT].strip()}\n[... truncated at {OUTPUT_LIMIT} characters]'
-    return raw.strip()
+    return _truncate(getattr(report, 'capstdout', ''), OUTPUT_LIMIT)
+
+
+def _truncate(text: str, limit: int) -> str:
+    """`text` without surrounding blank lines, cut visibly when it is too long."""
+    if len(text) > limit:
+        return f'{text[:limit].strip()}\n[... truncated at {limit} characters]'
+    return text.strip()
 
 
 def _relative(text: str) -> str:

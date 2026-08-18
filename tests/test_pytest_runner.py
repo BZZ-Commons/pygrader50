@@ -145,6 +145,31 @@ def test_the_students_own_output_is_echoed(tmp_path):
     assert 'zwischenwert 42' in entry['console']
 
 
+def test_the_pytest_excerpt_reaches_the_log(tmp_path):
+    """The source line and the values around the failure, not just the verdict."""
+    entry = run_case(
+        tmp_path,
+        'def wert():\n    return None\n\n\ndef test_case():\n    assert wert() == 8\n',
+    )
+
+    assert 'Details from pytest:' in entry['console']
+    assert '>       assert wert() == 8' in entry['console']
+    assert 'E       assert None == 8' in entry['console']
+
+
+def test_a_broken_import_shows_its_traceback_in_the_log(tmp_path):
+    workspace = tmp_path / 'importfehler'
+    workspace.mkdir()
+    (workspace / 'solution.py').write_text('"""Leer."""\n', encoding='UTF-8')
+    entry = run_case(
+        workspace,
+        'from solution import ggt\n\n\ndef test_case():\n    assert ggt(4, 2) == 2\n',
+    )
+
+    assert 'Details from pytest:' in entry['console']
+    assert 'case_test.py' in entry['console']
+
+
 def test_long_output_is_truncated(tmp_path):
     entry = run_case(
         tmp_path,

@@ -157,8 +157,35 @@ Lösung hat einen Tippfehler, das Testfile kann sie nicht importieren, und
 `try/except ImportError` legt und dort eine eigene Meldung wirft, steht diese
 Meldung in der Tabelle — der direkteste Weg, eine Klasse gezielt zu lenken.
 
-Was die Lernenden mit `print()` ausgeben, steht im Actions-Log unter dem
-gescheiterten Test unter *Output of your program:*, gekappt bei 500 Zeichen.
+### Was im Actions-Log steht
+
+Unter jedem gescheiterten Test stehen drei Blöcke:
+
+```
+❌ Test Failed: test_ggt 1/2
+Expected :	 5
+Actual :	 -5
+
+Details from pytest:
+def test_ggt():
+        assert main.ggt(56, 48) == 8
+>       assert main.ggt(0, 5) == 5
+E       assert -5 == 5
+
+main_test.py:6: AssertionError
+
+Output of your program:
+debug: 56, 48
+debug: 0, 5
+```
+
+*Details from pytest* ist der Auszug, den pytest sonst im Terminal zeigt — die
+Zeile mit `>` ist die gescheiterte Prüfung, die Zeilen mit `E` sind die
+tatsächlichen Werte. Gekappt bei 4000 Zeichen, damit eine Endlosrekursion den
+Log nicht sprengt.
+
+*Output of your program* ist alles, was die Lösung selbst mit `print()`
+ausgegeben hat, gekappt bei 500 Zeichen. Bis `v2.2.0` wurde beides verworfen.
 
 ## Ein Bundle anlegen
 
