@@ -9,7 +9,7 @@ Stück welchen Teil verantwortet.
 |---|---|---|
 | `<ORG>/classroom50` | Config-Repo: `assignments.json`, `roster.csv`, `scores.json`, Autograder, Workflows, Pages-Site | privat |
 | `<ORG>/<CLASSROOM>-<SLUG>-<LOGIN>` | Studi-Repo, eines pro Person und Aufgabe | privat |
-| Template-Repo | Startcode, Tests, Musterlösung einer Aufgabe | frei wählbar |
+| Template-Repo | Startcode und Tests einer Aufgabe, siehe [Aufgaben-Template](template.md) | frei wählbar |
 | `BZZ-Commons/pygrader50` | dieses Repo: Bewertungs-Engine und Moodle-Übertrag | öffentlich |
 | [`foundation50/classroom50`](https://github.com/foundation50/classroom50) | Upstream-Projekt, dessen Runner uns aufruft | öffentlich |
 

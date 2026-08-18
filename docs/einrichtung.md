@@ -120,7 +120,8 @@ aber es ist eine Upstream-Entscheidung, die sich ohne Zutun ändern kann —
 deshalb besser explizit setzen.
 
 Das Template-Repo muss als **Template repository** markiert sein (Settings →
-*Template repository*), sonst lehnt die CLI es ab.
+*Template repository*), sonst lehnt die CLI es ab. Was hineingehört und wie
+eine neue Aufgabe daraus entsteht: [Aufgaben-Template](template.md).
 
 **Prüfen**, dass die Pages-Site den neuen Eintrag ausliefert:
 

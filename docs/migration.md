@@ -142,3 +142,5 @@ als nötig. Was hineingehört und was nicht:
 
 `.classroom50.yaml` und `.github/workflows/autograde-runner.yaml` legt
 Classroom 50 beim Annehmen selbst an — beide gehören **nicht** ins Template.
+
+Der vollständige Soll-Aufbau eines Templates: [Aufgaben-Template](template.md).

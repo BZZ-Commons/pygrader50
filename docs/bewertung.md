@@ -12,7 +12,9 @@ Beides zählt zur Note.
 | `pylintrc` | pylint-Konfiguration |
 
 Wo sie gesucht werden, steht unter [Konzept](konzept.md#wo-die-konfiguration-einer-aufgabe-liegt).
-Eine vollständige Vorlage liegt in [`examples/bundle/`](../examples/bundle).
+Eine vollständige Vorlage liegt in [`examples/bundle/`](../examples/bundle); im
+Template-Repo liegen dieselben drei Dateien unter `.github/autograding/`, siehe
+[Aufgaben-Template](template.md).
 
 ### `unittests.json`
 
@@ -107,6 +109,8 @@ Unvermeidlich ist das nur bei Stubs: eine Funktion mit `pass` und ungenutzten
 Parametern erzeugt `W0613 unused-argument`, eine Zuweisung aus einer Funktion
 ohne `return` erzeugt `E1111`. Beides verschwindet mit der Lösung. Wer es
 vermeiden will, gibt dem Stub einen plausiblen Rückgabewert statt `pass`.
+
+Was sonst noch ins Template gehört: [Aufgaben-Template](template.md).
 
 ## Beispiel-Feedback
 

@@ -22,6 +22,7 @@ statt konkreten Klassennamen.
 |---|---|
 | [Konzept](docs/konzept.md) | wie Classroom 50 die Engine aufruft, welche Repos beteiligt sind |
 | [Bewertung](docs/bewertung.md) | `unittests.json`, `lint.json`, `pylintrc`, wie Punkte entstehen |
+| [Aufgaben-Template](docs/template.md) | Aufbau eines Template-Repos, neue Aufgabe ableiten |
 | [Einrichtung](docs/einrichtung.md) | einen Classroom von Grund auf anschliessen |
 | [Betrieb](docs/betrieb.md) | Roster, Aufgaben, Nachbewerten, Betriebsfallen |
 | [Moodle](docs/moodle.md) | Notenübertrag und Zuordnung der Personen |
