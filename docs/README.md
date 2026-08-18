@@ -23,7 +23,7 @@ Wo ein Beispiel nötig ist, steht ein Platzhalter.
 - **[Bewertung](bewertung.md)** — `unittests.json`, `lint.json`, `pylintrc`, wie Punkte entstehen
 - **[Aufgaben-Template](template.md)** — was in ein Template-Repo gehört, was nicht, und wie eine neue Aufgabe daraus entsteht
 - **[Einrichtung](einrichtung.md)** — einen Classroom von Grund auf anschliessen
-- **[Betrieb](betrieb.md)** — Roster, Aufgaben, Nachbewerten, Betriebsfallen
+- **[Betrieb](betrieb.md)** — Roster, Aufgaben, Abgabemodus, Nachbewerten, Betriebsfallen
 - **[Moodle](moodle.md)** — Notenübertrag, Zugangsdaten, Zuordnung der Personen
 - **[Migration](migration.md)** — Umstieg von GitHub Classroom
 - **[CLI-Referenz](cli.md)** — alle Kommandos, Optionen, Umgebungsvariablen

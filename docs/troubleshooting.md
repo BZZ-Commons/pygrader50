@@ -6,7 +6,9 @@ Symptom → Ursache. Ausführliche Erklärungen stehen auf den verlinkten Seiten
 
 | Symptom | Ursache / Abhilfe |
 |---|---|
-| Es startet kein Bewertungslauf | Enthält die Commit-Message `NOACTION` oder `CLASSROOM 50`, wird absichtlich übersprungen. Sonst im Reiter **Actions** nachsehen. |
+| Es startet kein Bewertungslauf | Steht die Aufgabe im Modus «nur auf Abgabe», braucht es einen `submit/`-Tag — siehe [Für Lernende](lernende.md#3-bearbeiten-und-abgeben). Sonst: enthält die Commit-Message `NOACTION`, `CLASSROOM 50` oder `[skip ci]`, wird absichtlich übersprungen. Sonst im Reiter **Actions** nachsehen. |
+| Abgegeben, trotzdem kein Lauf | Der Tag muss mit `submit/` beginnen **und** auf einen Commit zeigen, der schon auf GitHub liegt: erst `git push`, dann `git push origin <tag>`. |
+| Unerwarteter Konflikt beim Pushen | Die Lehrperson hat den Abgabemodus umgestellt und dabei einen Commit ins Repo geschrieben. Einmal `git pull`. |
 | Release zeigt `0/0` | Für diese Aufgabe ist keine Bewertung hinterlegt. Kein Fehler auf deiner Seite — der Lehrperson melden. |
 | Rotes Kreuz, aber alle Tests grün | Das Linting gab 0 Punkte. Zeile `Linting` im Release ansehen. |
 | pylint meckert auf GitHub mehr als lokal | Die Bewertung benutzt eigene, festgelegte Versionen statt deiner `requirements.txt`. |
@@ -28,6 +30,8 @@ Symptom → Ursache. Ausführliche Erklärungen stehen auf den verlinkten Seiten
 | Lint-Punkte weichen von früher ab | Neuere pylint-Version prüft strenger als die alten Template-Pins |
 | Lint gibt 0 Punkte | Bei wenigen Statements und einem `E…` wird die pylint-Note negativ und auf 0 geklemmt — korrekt, kein Defekt. Siehe [Bewertung](bewertung.md#startcode-lint-sauber-halten) |
 | Zwei Bewertungsläufe pro Push | Die alte `classroom.yml` liegt noch im Repo, siehe [Migration](migration.md) |
+| Ein Teil der Klasse wird bewertet, der andere gar nicht | Der Abgabemodus wurde zentral geändert, ohne die bestehenden Repos nachzuziehen — der Auslöser sitzt in jedem Studi-Repo. `gh teacher assignment submission-mode … --every-push` (bzw. `--tag`) erneut laufen lassen, siehe [Betrieb](betrieb.md#abgabemodus-jeder-push-oder-nur-submit-tags) |
+| Selbst gesetzter `submit/*`-Tag löst nichts aus | Der getaggte Commit trägt `[skip ci]` — typisch der Retrofit-Commit von `submission-mode`. Den letzten echten Commit der Lernenden taggen statt `HEAD` |
 
 ## Einsammeln
 

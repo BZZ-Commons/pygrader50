@@ -5,8 +5,17 @@ Der laufende Betrieb einer eingerichteten Klasse. Neu aufsetzen:
 
 ## Werkzeug
 
-Classroom 50 hat keine Web-Oberfläche zum Verwalten. Alles läuft über die
-GitHub-CLI-Erweiterung `gh teacher`:
+Classroom 50 lässt sich auf zwei Wegen bedienen, beide schreiben in dasselbe
+Config-Repo:
+
+| Weg | Womit | Wofür |
+|---|---|---|
+| **Web-Oberfläche** | [classroom50.org](https://classroom50.org), Anmeldung mit dem GitHub-Konto | Aufgaben anlegen und ändern, Abgabemodus setzen, Roster pflegen, Punkte ansehen, überschreiben und als CSV ausgeben, nachbewerten |
+| **CLI** | `gh teacher` | dasselbe, aber skriptbar — Massenänderungen über viele Aufgaben, Automatisierung, alles was hier in der Doku als Befehl steht |
+
+Diese Seite zeigt durchgehend die CLI, weil ein Befehl kopierbar und
+wiederholbar ist. Wo dieselbe Sache in der Oberfläche liegt, steht es dabei.
+Für einen einzelnen Handgriff ist die Oberfläche meist schneller.
 
 ```bash
 gh extension install foundation50/gh-teacher
@@ -56,6 +65,51 @@ Damit das Linting überall zur Note zählt, stehen alle Aufgaben auf
 `"autograder": "default"` und tragen **keinen** `tests`-Block — Begründung unter
 [Konzept](konzept.md#warum-nicht-die-deklarativen-tests-von-classroom-50).
 
+## Abgabemodus: jeder Push oder nur `submit`-Tags
+
+Pro Aufgabe steht, wann ein Bewertungslauf startet:
+
+| Modus | Feld in `assignments.json` | Wann bewertet wird |
+|---|---|---|
+| **jeder Push** (Vorgabe) | Feld fehlt | jeder Push auf den Standardzweig, zusätzlich jeder `submit/*`-Tag |
+| **nur Tag** | `"submission_mode": "tag"` | ausschliesslich ein `submit/*`-Tag; ein gewöhnlicher `git push` speichert nur |
+
+Der Tag-Modus ist der Kostenhebel: bei grossen Klassen kostet nicht mehr jeder
+Zwischenstand Actions-Minuten, sondern nur die bewusste Abgabe. Der Preis ist
+ein zusätzlicher Schritt für die Lernenden, siehe
+[Für Lernende](lernende.md#3-bearbeiten-und-abgeben).
+
+Umstellen — in der Oberfläche beim Bearbeiten der Aufgabe, oder:
+
+```bash
+gh teacher assignment submission-mode <ORG> <CLASSROOM> <SLUG> --every-push
+gh teacher assignment submission-mode <ORG> <CLASSROOM> <SLUG> --tag
+gh teacher assignment submission-mode <ORG> <CLASSROOM> <SLUG> --tag --dry-run
+```
+
+**Der Modus steht nicht nur im Config-Repo, sondern in jedem Studi-Repo.** Der
+Auslöser ist der `on:`-Block in `.github/workflows/autograde.yaml`, und GitHub
+wertet ihn aus, bevor irgendein Job startet. Umschalten heisst deshalb: Feld
+setzen **und** diese Datei in allen bestehenden Repos neu schreiben. Genau das
+tut der Befehl — er geht die Klassenmitglieder durch, ist idempotent und
+committet mit `[skip ci]`. Ein einzelnes Repo nachziehen: `--user <LOGIN>`.
+
+Drei Dinge, die dabei regelmässig auffallen:
+
+- **Die Lernenden müssen danach `git pull`.** Der Retrofit-Commit liegt in ihrem
+  Repo; ein veralteter Klon kollidiert beim nächsten Push.
+- **Wer den Modus nur im Config-Repo ändert, erzeugt zwei Generationen.** Vorher
+  angenommene Repos behalten ihren alten Auslöser, neu angenommene bekommen den
+  neuen. Symptom: ein Teil der Klasse wird bei jedem Push bewertet, der andere
+  Teil hat null Runs, null Tags, null Releases — und niemand hat etwas falsch
+  gemacht.
+- **Aufgaben mit teacher-eigenem Autograder** rührt der Befehl nicht an. Dort
+  den `on:`-Block selbst pflegen und mit `--update-shims=false` nur das Feld
+  umlegen.
+
+Nachbewerten nach einem Retrofit: siehe [Nachbewerten](#nachbewerten) — der
+`[skip ci]`-Commit ist dabei eine Falle.
+
 ## Resultate einsehen
 
 - **Pro Abgabe** — Release und Commit-Status im Studi-Repo.
@@ -80,10 +134,31 @@ gh workflow run collect-scores.yaml --repo <ORG>/classroom50
 
 ## Nachbewerten
 
-Eine Abgabe neu bewerten lassen: im Studi-Repo unter **Actions** den
-Bewertungslauf erneut starten (*Re-run all jobs*). Das erzeugt ein neues
-Release; der nächste Moodle-Lauf überträgt die geänderte Punktzahl automatisch,
-weil sich die Punktzahl unterscheidet.
+Eine Abgabe neu bewerten lassen: in der Oberfläche über *Regrade*, oder im
+Studi-Repo unter **Actions** den Bewertungslauf erneut starten
+(*Re-run all jobs*). Das erzeugt ein neues Release; der nächste Moodle-Lauf
+überträgt die geänderte Punktzahl automatisch, weil sich die Punktzahl
+unterscheidet.
+
+Gibt es noch gar keinen Lauf — etwa weil die Aufgabe im Tag-Modus stand und
+niemand abgegeben hat —, lässt sich ein Stand von aussen zur Bewertung bringen,
+indem man den `submit/*`-Tag selbst setzt:
+
+```bash
+SHA=$(gh api repos/<ORG>/<CLASSROOM>-<SLUG>-<LOGIN>/git/ref/heads/main --jq '.object.sha')
+gh api repos/<ORG>/<CLASSROOM>-<SLUG>-<LOGIN>/git/refs \
+  -f ref="refs/tags/submit/$(date -u +%Y-%m-%dT%H-%M-%SZ)-${SHA:0:7}" -f sha="$SHA"
+```
+
+> **Falle:** zeigt der Tag auf einen Commit, dessen Message `[skip ci]` enthält
+> — und genau das trifft auf den Retrofit-Commit von `submission-mode` zu —,
+> passiert **nichts**. GitHub wertet `[skip ci]` am Head-Commit des
+> Push-Ereignisses aus, auch bei einem Tag-Push. Dann den letzten echten Commit
+> der Lernenden taggen statt `HEAD`. Dessen Baum darf ruhig noch den alten
+> Auslöser enthalten: `tags: ["submit/*"]` steht in beiden Generationen.
+
+Das schreibt eine echte Note: Release, Commit-Status, und über den Nachtlauf
+Moodle. Für unfertige Zwischenstände also sparsam einsetzen.
 
 Nur die Note in Moodle nachtragen, ohne neuen Bewertungslauf:
 

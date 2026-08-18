@@ -252,7 +252,9 @@ für die Bewertung ist es nicht nötig.
 
 ## `gh teacher` — Classrooms verwalten
 
-Nicht Teil dieses Repos, aber die Gegenstelle. Vollständige Referenz im
+Nicht Teil dieses Repos, aber die Gegenstelle. Dieselben Handgriffe gibt es in
+der Web-Oberfläche [classroom50.org](https://classroom50.org); die CLI ist der
+skriptbare Weg. Vollständige Referenz im
 [Wiki von foundation50/classroom50](https://github.com/foundation50/classroom50/wiki).
 
 ```bash
@@ -262,7 +264,24 @@ gh auth refresh -h github.com -s admin:org,read:org,repo,workflow
 gh teacher classroom list <ORG>
 gh teacher assignment list <ORG> <CLASSROOM>
 gh teacher assignment add <ORG> <CLASSROOM> <SLUG> --name "<SLUG>" --template <OWNER>/<REPO>@main
+gh teacher assignment submission-mode <ORG> <CLASSROOM> <SLUG> --every-push
+gh teacher assignment submission-mode <ORG> <CLASSROOM> <SLUG> --tag
 gh teacher autograder show <ORG> <CLASSROOM>
 gh teacher autograder set-default <ORG> <CLASSROOM> --from bootstrap/autograder.py
 gh teacher rotate-service-token <ORG>
+```
+
+`submission-mode` schreibt nicht nur das Feld in `assignments.json`, sondern
+auch `.github/workflows/autograde.yaml` in jedem bestehenden Studi-Repo — der
+Auslöser sitzt dort, nicht zentral. Details und Fallstricke unter
+[Betrieb](betrieb.md#abgabemodus-jeder-push-oder-nur-submit-tags).
+
+## `gh student` — abgeben
+
+Die Gegenstelle auf der Seite der Lernenden. Braucht es nur bei Aufgaben im
+Tag-Modus; ein von Hand gesetzter `submit/*`-Tag tut dasselbe.
+
+```bash
+gh extension install foundation50/gh-student
+gh student submit
 ```
