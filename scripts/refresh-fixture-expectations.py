@@ -25,13 +25,21 @@ import fixture_corpus  # noqa: E402  pylint: disable=wrong-import-position
 FIELDS = ('name', 'feedback', 'expected', 'actual', 'points')
 
 
-def record(rows: list[dict], match: str | None) -> dict:
-    """Build the expectation document for one fixture."""
-    document: dict = {}
-    if match is not None:
-        document['match'] = match
-    document['cases'] = [{field: row[field] for field in FIELDS} for row in rows]
-    return document
+def record(rows: list[dict], previous: dict | None) -> dict:
+    """Fresh expectation, keeping every cell a human pinned as `contains`.
+
+    Only those cells are hand-maintained; points, case list and the rest of a
+    pinned fixture are regenerated like anywhere else.
+    """
+    pinned = {case['name']: case for case in (previous or {}).get('cases', [])}
+    cases = []
+    for row in rows:
+        recorded = {field: row[field] for field in FIELDS}
+        for field, value in pinned.get(row['name'], {}).items():
+            if isinstance(value, dict):
+                recorded[field] = value
+        cases.append(recorded)
+    return {'cases': cases}
 
 
 def main() -> int:
@@ -55,30 +63,20 @@ def main() -> int:
             rows = fixture_corpus.grade(fixture, pathlib.Path(workdir))
         path = fixture / fixture_corpus.EXPECTATION_FILENAME
         previous = fixture_corpus.expectation(fixture) if path.is_file() else None
-        match = previous.get('match') if previous else None
+        problems = fixture_corpus.mismatches(previous, rows) if previous else ['no expectation']
 
-        # A `contains` expectation lists substrings a human chose; regenerating
-        # it would replace them with the full sentence and quietly undo the
-        # portability it was written for. Check it instead.
-        if match == 'contains':
-            problems = fixture_corpus.mismatches(previous, rows)
-            print(f'{"DRIFT     " if problems else "unchanged "} {fixture.name}')
-            for problem in problems:
-                print(f'             {problem}')
-            drifted += 1 if problems else 0
-            continue
-
-        document = record(rows, match)
-        if previous == document:
+        if not problems:
             print(f'unchanged  {fixture.name}')
             continue
+
         drifted += 1
         if arguments.check:
-            problems = fixture_corpus.mismatches(previous, rows) if previous else ['no expectation']
             print(f'DRIFT      {fixture.name}')
             for problem in problems:
                 print(f'             {problem}')
             continue
+
+        document = record(rows, previous)
         path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + '\n', encoding='UTF-8')
         print(f'written    {fixture.name}')
 

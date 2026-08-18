@@ -15,14 +15,13 @@ from __future__ import annotations
 import os
 import pathlib
 from contextlib import redirect_stdout
-from io import StringIO
 from typing import NamedTuple
 
 import pytest
 from _pytest.config import ExitCode
 
 from .config import Testcase
-from .console import bcolors, points, section
+from .console import bcolors, fail, points, section
 
 CATEGORY = 'pytest'
 TITLE = 'Unittests'
@@ -31,6 +30,10 @@ TITLE = 'Unittests'
 # is the one GitHub Classroom's Python grader settled on: long enough for a few
 # debug prints, short enough to keep the log readable.
 OUTPUT_LIMIT = 500
+
+# Fields of a feedback entry that reach the student and must not carry the
+# runner's absolute paths.
+STUDENT_FIELDS = ('feedback', 'expected', 'actual')
 
 
 class Outcome(NamedTuple):
@@ -42,21 +45,61 @@ class Outcome(NamedTuple):
     output: str = ''
 
 
+class Discard:
+    """Sink for pytest's terminal report, which nothing here reads.
+
+    A `StringIO` would assemble every rendered traceback in memory only to drop
+    it when the case ends.
+    """
+
+    encoding = 'UTF-8'
+
+    def write(self, text: str) -> int:
+        """Accept the text and forget it."""
+        return len(text)
+
+    def flush(self) -> None:
+        """Nothing is buffered."""
+
+    def isatty(self) -> bool:
+        """Never a terminal, so pytest renders without control codes."""
+        return False
+
+
 class CaseCollector:
     """Everything one `-k` selected pytest run produced.
 
-    Registered as a plugin for a single `pytest.main()` call, so its state
-    always belongs to exactly one case.
+    One slot per thing the verdict can rest on, not a list of everything: `-k`
+    matches by substring and a test may have many subtests, so keeping every
+    report would hold dozens of tracebacks and their captured output alive at
+    once.
     """
 
     def __init__(self) -> None:
-        self.reports: list = []
-        self.comparisons: list[tuple[str, object, object]] = []
+        self.failed = None
+        self.call = None
+        self.skipped = None
+        self.comparison: tuple[str, object, object] | None = None
         self.excinfo = None
 
+    @property
+    def verdict(self):
+        """The report that decides the case, or None if nothing ever ran.
+
+        A failing phase wins — a broken fixture is the verdict even though the
+        call never happened. Otherwise the call phase, and a case skipped before
+        it ever got there falls back to the phase that recorded the skip.
+        """
+        return self.failed or self.call or self.skipped
+
     def pytest_runtest_logreport(self, report) -> None:
-        """Keep every phase report; `_verdict_report` picks the deciding one."""
-        self.reports.append(report)
+        """Keep the first report of each kind the verdict can rest on."""
+        if report.failed and self.failed is None:
+            self.failed = report
+        elif report.skipped and self.skipped is None:
+            self.skipped = report
+        if report.when == 'call' and self.call is None:
+            self.call = report
 
     def pytest_exception_interact(self, call) -> None:
         """Keep the exception itself, the only handle on a collection error.
@@ -73,14 +116,15 @@ class CaseCollector:
     # The explicit `return None` below is the hook contract, not a leftover.
     @pytest.hookimpl(tryfirst=True)
     def pytest_assertrepr_compare(self, op, left, right):  # pylint: disable=useless-return
-        """Record a failed comparison without claiming the representation.
+        """Record the first failed comparison without claiming its rendering.
 
         `tryfirst` plus a `None` return is deliberate on both ends: the hook is
         `firstresult`, so returning a value would suppress pytest's own diff,
         and running last would let a conftest.py in the student checkout hide
         the values from us.
         """
-        self.comparisons.append((op, left, right))
+        if self.comparison is None:
+            self.comparison = (op, left, right)
         return None
 
 
@@ -105,7 +149,7 @@ def run(cases: list[Testcase]) -> dict:
 
         # pytest's own chatter would drown out the graded sections in the
         # Actions log; what the student's code printed is echoed below instead.
-        with redirect_stdout(StringIO()):
+        with redirect_stdout(Discard()):
             exitcode = pytest.main(args, plugins=[collector])
 
         outcome = _evaluate(case, collector, exitcode)
@@ -114,7 +158,7 @@ def run(cases: list[Testcase]) -> dict:
 
         _case_header(case.name, number, len(cases), outcome.status)
         if outcome.message:
-            print(f'{bcolors.FAIL}{outcome.message}{bcolors.ENDC}')
+            fail(outcome.message)
         if outcome.output:
             print(f'{bcolors.WARNING}Output of your program:{bcolors.ENDC}')
             print(outcome.output)
@@ -133,27 +177,34 @@ def run(cases: list[Testcase]) -> dict:
 
 
 def _evaluate(case: Testcase, collector: CaseCollector, exitcode) -> Outcome:
+    """Classify one finished case and strip the checkout path from its texts.
+
+    Sanitizing here rather than in each branch is the point: every string that
+    reaches the student passes through this one place, so a new branch cannot
+    forget it and leak `/home/runner/work/...` into the feedback table.
+    """
+    outcome = _classify(case, collector, exitcode)
+    for field in STUDENT_FIELDS:
+        outcome.result[field] = _relative(str(outcome.result[field]))
+    return outcome._replace(message=_relative(outcome.message))
+
+
+def _classify(case: Testcase, collector: CaseCollector, exitcode) -> Outcome:
     """Status, feedback entry and console text for one finished case."""
     result = _initial_result(case)
-    report = _verdict_report(collector.reports)
+    report = collector.verdict
 
     if report is None:
         return _without_report(result, collector, exitcode)
-
     if report.skipped:
         return _skipped(case, result, report)
-
     if report.passed:
         result['feedback'] = 'Success'
         result['points'] = case.points
         return Outcome('passed', result, '')
-
     if report.when != 'call':
         return _phase_error(result, report)
-
-    fields, message = _failure(collector, report)
-    result.update(fields)
-    return Outcome('failed', result, message, _captured(report))
+    return _failed(collector, result, report)
 
 
 def _without_report(result: dict, collector: CaseCollector, exitcode) -> Outcome:
@@ -164,11 +215,11 @@ def _without_report(result: dict, collector: CaseCollector, exitcode) -> Outcome
     it names the exception instead of an exit code.
     """
     if collector.excinfo is not None:
-        reason = _exception_reason(collector.excinfo)
-        # Whole message, not just its first line: a template can raise an
+        # The whole message, not just its first line: a template can raise an
         # ImportError with a hand-written hint spanning several lines, and that
         # hint is the most useful thing the student will read all run.
-        result['feedback'] = f'Test file could not be loaded - {_single_line(reason)}'
+        reason = _exception_reason(collector.excinfo)
+        result['feedback'] = _summary('Test file could not be loaded', _single_line(reason))
         return Outcome('error', result, reason)
     if exitcode not in (ExitCode.OK, ExitCode.NO_TESTS_COLLECTED):
         result['feedback'] = f'Unknown error "{exitcode}", check GitHub Actions for details'
@@ -180,10 +231,9 @@ def _without_report(result: dict, collector: CaseCollector, exitcode) -> Outcome
 def _phase_error(result: dict, report) -> Outcome:
     """Outcome of a failure outside the call phase — a fixture, a teardown."""
     message = _crash_message(report)
-    reason = _first_line(message)
-    result['feedback'] = (
-        f'Error during {report.when} - {reason}' if reason
-        else f'Error during {report.when}, check GitHub Actions for details'
+    result['feedback'] = _summary(
+        f'Error during {report.when}', _first_line(message),
+        fallback=f'Error during {report.when}, check GitHub Actions for details',
     )
     return Outcome('error', result, message, _captured(report))
 
@@ -198,12 +248,40 @@ def _skipped(case: Testcase, result: dict, report) -> Outcome:
         result['feedback'] = 'Success: Fails as expected'
         result['points'] = case.points
         return Outcome('passed', result, '')
-    reason = _skip_reason(report)
-    result['feedback'] = (
-        f'Test was skipped at this time - {reason}' if reason
-        else 'Test was skipped at this time'
-    )
+    result['feedback'] = _summary('Test was skipped at this time', _skip_reason(report))
     return Outcome('skipped', result, '')
+
+
+def _failed(collector: CaseCollector, result: dict, report) -> Outcome:
+    """Outcome of a failed call phase.
+
+    A comparison recorded by the hook gives the student the two values; without
+    one (a raised exception, a `unittest` assertion, a timeout) the crash line
+    is all there is.
+    """
+    if collector.comparison is not None:
+        operator, left, right = collector.comparison
+        # `==` is the overwhelming case and reads fine bare. For anything else
+        # the two values alone are a riddle: a failed `!=` would otherwise
+        # claim expected 5, actual 5.
+        expected = str(right) if operator == '==' else f'{operator} {right}'
+        actual = str(left)
+        result.update({
+            'feedback': _summary(
+                'Assertion Error', _location(report), template='{stem} ({detail})'
+            ),
+            'expected': expected,
+            'actual': actual,
+        })
+        message = f'Expected :\t {expected}\nActual :\t {actual}\n'
+        return Outcome('failed', result, message, _captured(report))
+
+    message = _crash_message(report)
+    result['feedback'] = _summary(
+        'Test failed', _first_line(message),
+        fallback='Test failed, check GitHub Actions for more details.',
+    )
+    return Outcome('failed', result, message, _captured(report))
 
 
 def _initial_result(case: Testcase) -> dict:
@@ -217,54 +295,16 @@ def _initial_result(case: Testcase) -> dict:
     }
 
 
-def _verdict_report(reports: list):
-    """The report that decides the case.
+def _summary(stem: str, detail: str, *, fallback: str = '',
+             template: str = '{stem} - {detail}') -> str:
+    """A feedback sentence: the stem, plus the detail when there is one.
 
-    A failing phase wins — a broken fixture is the verdict even though the call
-    never ran. Otherwise the call phase, and a case skipped before it ever got
-    there falls back to whichever phase recorded the skip.
+    Every student-facing line is joined here, so the wording the fixture corpus
+    guards can be reviewed in one place.
     """
-    for report in reports:
-        if report.failed:
-            return report
-    for report in reports:
-        if report.when == 'call':
-            return report
-    for report in reports:
-        if report.skipped:
-            return report
-    return None
-
-
-def _failure(collector: CaseCollector, report) -> tuple[dict, str]:
-    """Feedback fields and console message for a failed call phase.
-
-    A comparison recorded by the hook gives the student the two values; without
-    one (a raised exception, a `unittest` assertion, a timeout) the crash line
-    is all there is.
-    """
-    if collector.comparisons:
-        operator, left, right = collector.comparisons[0]
-        # `==` is the overwhelming case and reads fine bare. For anything else
-        # the two values alone are a riddle: a failed `!=` would otherwise
-        # claim expected 5, actual 5.
-        expected = str(right) if operator == '==' else f'{operator} {right}'
-        actual = str(left)
-        where = _location(report)
-        return (
-            {
-                'feedback': f'Assertion Error ({where})' if where else 'Assertion Error',
-                'expected': expected,
-                'actual': actual,
-            },
-            f'Expected :\t {expected}\nActual :\t {actual}\n',
-        )
-
-    reason = _crash_message(report)
-    summary = f'Test failed - {_first_line(reason)}' if reason else (
-        'Test failed, check GitHub Actions for more details.'
-    )
-    return {'feedback': summary}, reason
+    if not detail:
+        return fallback or stem
+    return template.format(stem=stem, detail=detail)
 
 
 def _exception_reason(excinfo) -> str:
@@ -273,7 +313,8 @@ def _exception_reason(excinfo) -> str:
     pytest wraps an import failure in a `CollectError` whose message is the
     rendered traceback — unusable in a table cell. The `raise ... from` chain
     still carries the SyntaxError or ImportError underneath, and that one line
-    is the whole story for the student.
+    is the whole story for the student. Templates raise their own hints with
+    `from None`, so unwrapping to the root keeps them.
     """
     error = excinfo.value
     for _ in range(10):  # bounded: a cyclic __cause__ must not hang the grader
@@ -281,23 +322,29 @@ def _exception_reason(excinfo) -> str:
         if cause is None:
             break
         error = cause
-    return _relative(f'{type(error).__name__}: {error}')
+    return f'{type(error).__name__}: {error}'
+
+
+def _reprcrash(report):
+    """pytest's record of where a run died, or None.
+
+    `longrepr.reprcrash` is not part of pytest's public API. It is still a far
+    steadier target than the wording of the summary line — this one accessor is
+    the whole surface that would have to move if it ever changes.
+    """
+    return getattr(report.longrepr, 'reprcrash', None)
 
 
 def _crash_message(report) -> str:
-    """The reason pytest recorded for a crash, or the whole representation.
-
-    `longrepr.reprcrash` is not part of pytest's public API, but it is a far
-    steadier target than the wording of the summary line — hence the fallback.
-    """
-    crash = getattr(report.longrepr, 'reprcrash', None)
+    """The reason pytest recorded for a crash, or the whole representation."""
+    crash = _reprcrash(report)
     message = getattr(crash, 'message', '') if crash is not None else ''
-    return _relative((message or str(report.longrepr or '')).strip())
+    return (message or str(report.longrepr or '')).strip()
 
 
 def _location(report) -> str:
     """`file:line` of the failing assertion, or '' when pytest recorded none."""
-    crash = getattr(report.longrepr, 'reprcrash', None)
+    crash = _reprcrash(report)
     path, line = getattr(crash, 'path', ''), getattr(crash, 'lineno', None)
     if not path or line is None:
         return ''
@@ -317,12 +364,14 @@ def _captured(report) -> str:
     """What the student's own code printed, capped at `OUTPUT_LIMIT`.
 
     Their `print()` calls are the debugging tool they actually have; swallowing
-    those along with pytest's chatter left them nothing to look at.
+    those along with pytest's chatter left them nothing to look at. `capstdout`
+    rebuilds the whole capture on every access, so it is read once — a print in
+    a loop is exactly the bug this exists for.
     """
-    output = getattr(report, 'capstdout', '').strip()
-    if len(output) > OUTPUT_LIMIT:
-        return f'{output[:OUTPUT_LIMIT]}\n[... truncated at {OUTPUT_LIMIT} characters]'
-    return output
+    raw = getattr(report, 'capstdout', '')
+    if len(raw) > OUTPUT_LIMIT:
+        return f'{raw[:OUTPUT_LIMIT].strip()}\n[... truncated at {OUTPUT_LIMIT} characters]'
+    return raw.strip()
 
 
 def _relative(text: str) -> str:

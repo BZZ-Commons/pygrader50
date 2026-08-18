@@ -38,8 +38,10 @@ python scripts/refresh-fixture-expectations.py [fixture]    # neu aufzeichnen
 Neu aufzeichnen heisst: der Diff wurde gelesen und der neue Wortlaut ist der
 bessere. Genau dafür liegt der Korpus hier.
 
-Fixtures mit `"match": "contains"` in ihrer `expected.json` sind von Hand
-gepflegt und werden nie überschrieben. Ihre Rückmeldung zitiert eine Meldung von
-CPython selbst (`SyntaxError`, `ImportError`), deren Wortlaut sich zwischen den
-Python-Versionen der CI-Matrix unterscheiden kann; dort steht deshalb eine Liste
-der Bestandteile, die die Aussage tragen.
+Eine einzelne Zelle kann statt eines Literals `{"contains": [...]}` enthalten
+und wird dann nie überschrieben. Das brauchen nur die zwei Fixtures, deren
+Rückmeldung eine Meldung von CPython selbst zitiert (`SyntaxError`,
+`ImportError`): deren Wortlaut kann zwischen den Python-Versionen der CI-Matrix
+abweichen, darum stehen dort die Bestandteile, die die Aussage tragen. Alles
+andere an diesen Fixtures — Punkte, Fallliste, die übrigen Spalten — wird ganz
+normal mitgeneriert.

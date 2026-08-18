@@ -1,55 +1,32 @@
 """Score real pytest runs and check what lands in the feedback table.
 
-Every case runs the true `pytest_runner.run()` in a subprocess: nesting
-`pytest.main()` inside the session that runs these tests would share the module
-cache and the assertion-rewrite state between scenarios. The subprocess also
-keeps the point of the change honest — the verdict has to come out of pytest
-itself, not out of a hand-built report object.
+Every case runs the true `pytest_runner.run()` through `fixture_corpus`, which
+starts the engine in a subprocess: nesting `pytest.main()` inside the session
+that checks it would share the module cache and the assertion-rewrite state
+between scenarios. It also keeps the point of the change honest — the verdict
+has to come out of pytest itself, not out of a hand-built report object.
 """
 
-import json
 import os
 import pathlib
-import subprocess
-import sys
 
 import pytest
 
-from conftest import SRC
-
-DRIVER = '''\
-import json
-import sys
-
-from pygrader50 import pytest_runner
-from pygrader50.config import Testcase
-
-case = Testcase(name='case', function=sys.argv[2], timeout=int(sys.argv[3]), points=2)
-result = pytest_runner.run([case])
-with open(sys.argv[1], 'w', encoding='UTF-8') as handle:
-    json.dump(result, handle)
-'''
+import fixture_corpus
 
 
 def run_case(workspace: pathlib.Path, source: str, *,
              function: str = 'test_case', timeout: int = 10) -> dict:
-    """Grade `source` as the single declared case and return its feedback entry."""
+    """Grade `source` as the single declared case and return its feedback entry.
+
+    The console output of the run is added under `console`, so a test can check
+    what the student reads in the Actions log.
+    """
     workspace.mkdir(parents=True, exist_ok=True)
     (workspace / 'case_test.py').write_text(source, encoding='UTF-8')
-    driver = workspace / 'driver.py'
-    driver.write_text(DRIVER, encoding='UTF-8')
-    output = workspace / 'section.json'
-
-    env = dict(os.environ)
-    env['PYTHONPATH'] = str(SRC)
-    completed = subprocess.run(
-        [sys.executable, str(driver), str(output), function, str(timeout)],
-        cwd=workspace, env=env, capture_output=True, text=True, check=False,
-    )
-    assert output.is_file(), completed.stderr
-    section = json.loads(output.read_text(encoding='UTF-8'))
+    section = fixture_corpus.grade_checkout(workspace, [function], timeout=timeout)
     entry = dict(section['feedback'][0])
-    entry['console'] = completed.stdout
+    entry['console'] = section['console']
     return entry
 
 
@@ -192,21 +169,8 @@ def test_a_broken_fixture_is_reported_as_an_error(tmp_path):
 def test_no_cases_yields_an_empty_section(tmp_path):
     workspace = tmp_path / 'empty'
     workspace.mkdir()
-    driver = workspace / 'driver.py'
-    driver.write_text(
-        'import json\nimport sys\n\nfrom pygrader50 import pytest_runner\n\n'
-        'with open(sys.argv[1], "w", encoding="UTF-8") as handle:\n'
-        '    json.dump(pytest_runner.run([]), handle)\n',
-        encoding='UTF-8',
-    )
-    output = workspace / 'section.json'
-    env = dict(os.environ)
-    env['PYTHONPATH'] = str(SRC)
-    subprocess.run(
-        [sys.executable, str(driver), str(output)],
-        cwd=workspace, env=env, capture_output=True, text=True, check=True,
-    )
 
-    assert json.loads(output.read_text(encoding='UTF-8')) == {
-        'category': 'pytest', 'name': 'Unittests', 'points': 0, 'max': 0, 'feedback': [],
-    }
+    section = fixture_corpus.grade_checkout(workspace, [])
+
+    assert section['feedback'] == []
+    assert (section['points'], section['max']) == (0, 0)
