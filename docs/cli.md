@@ -1,12 +1,9 @@
 # CLI-Referenz
 
-Zwei Kommandos: eines bewertet, eines überträgt. Dazu ein Migrationsskript.
+Zwei Kommandos: eines bewertet, eines überträgt. Dazu drei Wartungsskripte.
 
-Die Beispiele nutzen `<CLASSROOM>` und `<SLUG>` als Platzhalter — die Kommandos
-sind klassenzimmer-neutral, es steckt nirgends ein Modul- oder Klassenname im
-Code.
-
----
+Alle Kommandos sind classroom-neutral — es steckt nirgends ein Modul- oder
+Klassenname im Code. Platzhalter siehe [Übersicht](README.md#platzhalter).
 
 ## `python -m pygrader50` — bewerten
 
@@ -19,7 +16,7 @@ Setzt der Runner (`run_entrypoint` in `runner.py`):
 
 | Variable | Bedeutung | Pflicht |
 |---|---|---|
-| `CLASSROOM` | Kurzname des Klassenzimmers | ja |
+| `CLASSROOM` | Kurzname des Classrooms | ja |
 | `ASSIGNMENT` | Slug der Aufgabe | ja |
 | `SUBMISSION_TAG` | `submit/<Zeitstempel>-<Kurz-SHA>` | ja |
 | `OWNER` / `USERNAME` | GitHub-Login der besitzenden Person | – ¹ |
@@ -53,10 +50,10 @@ Log, Exit 0.
 
 ```bash
 cd /pfad/zum/studi-repo
-CLASSROOM=m320-ix25 \
-ASSIGNMENT=m320-lu04-a4-objektkommunikation \
+CLASSROOM=<CLASSROOM> \
+ASSIGNMENT=<SLUG> \
 SUBMISSION_TAG=submit/2026-08-13T12-00-00Z-abc1234 \
-OWNER=anna \
+OWNER=<LOGIN> \
 python -m pygrader50
 cat release-body.md
 ```
@@ -65,12 +62,10 @@ Ohne `RUNNER_TEMP` entfällt die Bundle-Suche, es zählt also
 `.github/autograding/` im Checkout. Einen anderen Ort erzwingt
 `PYGRADER50_CONFIG_DIR`.
 
----
-
 ## `python -m pygrader50.moodle` — übertragen
 
-Liest `scores.json` aus dem classroom50-Config-Repo und schickt die Punkte an
-Moodle. Je (Assignment, Owner) geht die **neueste** Abgabe raus.
+Liest `scores.json` aus dem Config-Repo und schickt die Punkte an Moodle. Je
+Kombination aus Aufgabe und Person geht die **neueste** Abgabe raus.
 
 ```
 python -m pygrader50.moodle SCORES [Optionen]
@@ -80,7 +75,7 @@ python -m pygrader50.moodle SCORES [Optionen]
 
 | Option | Wirkung |
 |---|---|
-| `SCORES` | Pfad zu `<classroom>/scores.json` (Pflicht) |
+| `SCORES` | Pfad zu `<CLASSROOM>/scores.json` (Pflicht) |
 | `--assignment SLUG` | nur diese Aufgabe |
 | `--user LOGIN` | nur diesen GitHub-Login ¹ |
 | `--state PFAD` | Zustandsfile; ohne Angabe wird jedes Mal alles übertragen |
@@ -96,12 +91,13 @@ Aktivität existiert.
 
 | Variable | Bedeutung |
 |---|---|
-| `MOODLE_URL` | Basis-URL der Moodle-Instanz, z. B. `https://moodle.bzz.ch` |
+| `MOODLE_URL` | Basis-URL der Moodle-Instanz, z. B. `https://moodle.example.org` |
 | `MOODLE_TOKEN` | Webservice-Token |
 | `MOODLE_FUNCTION` | Vorgabe `mod_externalassignment_update_grade` |
 | `GH_TOKEN` / `GITHUB_TOKEN` | optional, liest die Release-Bodies für den Feedback-Text |
 
-Ohne `--dry-run` sind `MOODLE_URL` und `MOODLE_TOKEN` Pflicht.
+Ohne `--dry-run` sind `MOODLE_URL` und `MOODLE_TOKEN` Pflicht. Zur Falle mit
+einer leer gesetzten `MOODLE_FUNCTION` siehe [Moodle](moodle.md#zugangsdaten).
 
 ### Was an Moodle geht
 
@@ -119,7 +115,7 @@ Ohne `--dry-run` sind `MOODLE_URL` und `MOODLE_TOKEN` Pflicht.
 {
   "schema": "pygrader50/moodle-state/v1",
   "entries": {
-    "m323-lu01-a02-imperativer-ggt/graphics80": {
+    "<SLUG>/<LOGIN>": {
       "submission": "submit/2026-08-13T08-41-09Z-35bdcb2",
       "score": 5,
       "max-score": 7
@@ -148,11 +144,10 @@ Ein Fehler bricht den Lauf **nicht** ab: die übrigen Abgaben gehen trotzdem rau
 python -m pygrader50.moodle <CLASSROOM>/scores.json --dry-run --no-feedback
 
 # Eine einzelne Person nachtragen
-python -m pygrader50.moodle <CLASSROOM>/scores.json --user anna
+python -m pygrader50.moodle <CLASSROOM>/scores.json --user <LOGIN>
 
 # Eine Aufgabe nach einer Nachbewertung komplett neu schicken
-python -m pygrader50.moodle <CLASSROOM>/scores.json \
-  --assignment <SLUG> --force
+python -m pygrader50.moodle <CLASSROOM>/scores.json --assignment <SLUG> --force
 
 # Wie der Nachtlauf
 python -m pygrader50.moodle <CLASSROOM>/scores.json \
@@ -169,20 +164,16 @@ GH_TOKEN=$(gh auth token) python -m pygrader50.moodle scores.json --dry-run
 
 ### Manuell auslösen
 
-Im classroom50-Repo unter **Actions → Moodle Sync → Run workflow**: Klassenzimmer,
-optional Aufgabe und Login, dazu die Schalter `dry_run` und `force`. Bleibt das
-Klassenzimmer leer, laufen alle Ordner mit einer `scores.json`. Der Workflow
-liegt hier als [`classroom50/moodle-sync.yaml`](classroom50/moodle-sync.yaml),
-Einbau siehe [SETUP.md](SETUP.md).
-
-Oder von der Kommandozeile:
+Im Config-Repo unter **Actions → Moodle Sync → Run workflow**: Classroom,
+optional Aufgabe und Login, dazu die Schalter `dry_run` und `force`. Bleibt der
+Classroom leer, laufen alle Ordner mit einer `scores.json`. Der Workflow liegt
+hier als [`classroom50/moodle-sync.yaml`](../classroom50/moodle-sync.yaml),
+Einbau siehe [Einrichtung](einrichtung.md#61-workflow-einbauen).
 
 ```bash
 gh workflow run moodle-sync.yaml --repo <ORG>/classroom50 \
   -f classroom=<CLASSROOM> -f dry_run=true
 ```
-
----
 
 ## `scripts/remove-legacy-classroom-yml.sh` — migrieren
 
@@ -198,15 +189,11 @@ scripts/remove-legacy-classroom-yml.sh <ORG> <CLASSROOM> [--apply]
 | ohne `--apply` | Trockenlauf, listet jedes Ziel als `would rm` oder `absent` |
 | mit `--apply` | löscht `.github/workflows/classroom.yml`, ein Commit pro Repo |
 
-Die Zielliste kommt aus dem `template`-Block von
-`<CLASSROOM>/assignments.json`, **nicht** aus dem Repo-Listing der
-Template-Organisation — dort liegen auch Templates von Modulen, die noch auf dem
-alten Pfad laufen. Wiederholbar; fehlende Dateien sind `absent`, kein Fehler.
-Exit 1, sobald ein Repo scheitert.
+Die Zielliste kommt aus dem `template`-Block von `<CLASSROOM>/assignments.json`,
+**nicht** aus dem Repo-Listing der Template-Organisation. Wiederholbar; fehlende
+Dateien sind `absent`, kein Fehler. Exit 1, sobald ein Repo scheitert.
 
-Hintergrund und die nötige Token-Rotation: [SETUP.md](SETUP.md), Schritt 4.
-
----
+Hintergrund und die nötige Token-Rotation: [Migration](migration.md).
 
 ## `scripts/sync-template-pins.py` — Pins aktualisieren
 
@@ -227,16 +214,14 @@ scripts/sync-template-pins.py <ORG> <CLASSROOM> [--apply]
 Die Versionen stehen als Block am Kopf des Skripts. Wiederholbar: ein bereits
 aktuelles Template meldet `ok`.
 
-`pytest-asyncio` muss mit `pytest` mitziehen — 0.23.8 und pytest 9 lassen sich
-nicht gemeinsam auflösen. Pakete, die die Studierenden selbst eintragen sollen,
-gehören nicht in die Pin-Liste.
-
----
+`pytest-asyncio` muss mit `pytest` mitziehen — alte Versionen und pytest 9
+lassen sich nicht gemeinsam auflösen. Pakete, welche die Lernenden selbst
+eintragen sollen, gehören nicht in die Pin-Liste.
 
 ## `scripts/sync-template-docstrings.py` — Aufgabenlink setzen
 
 Schreibt in jedes Template einen Modul-Docstring, der die Aufgabe benennt und
-auf ihre Seite im Wiki zeigt.
+auf ihre Seite in einer externen Aufgabensammlung zeigt.
 
 ```
 scripts/sync-template-docstrings.py <ORG> <CLASSROOM> [--apply]
@@ -245,7 +230,7 @@ scripts/sync-template-docstrings.py <ORG> <CLASSROOM> [--apply]
 ```python
 """ToDo-Liste mit SQLite und DAO-Klassen.
 
-Aufgabenstellung: https://wiki.bzz.ch/modul/m323/learningunits/lu06/aufgaben/dao
+Aufgabenstellung: https://wiki.example.org/lu06/aufgaben/dao
 """
 ```
 
@@ -254,36 +239,30 @@ Aufgabenstellung: https://wiki.bzz.ch/modul/m323/learningunits/lu06/aufgaben/dao
 | Zieldatei | die erste Datei aus `lint.json`, `main.py` bevorzugt |
 | vorhandener Modul-Docstring | wird ersetzt, nicht ergänzt |
 | Datei ohne gültiges Python | Docstring wird vorangestellt, sofern die Datei nicht schon mit einem String beginnt |
-| Aufgabe ohne eindeutige Wiki-Seite | `SKIP`, es wird nicht geraten |
+| Aufgabe ohne eindeutige Zielseite | `SKIP`, es wird nicht geraten |
 
-Der Slug führt **nicht** zur Wiki-Seite: `m323-lu01-a04-funktionaler-ggt` steht
-unter `lu01/aufgaben/funktionalereuklid`, und in LU04 ist die Nummerierung gegen
-die Seitennamen verschoben (`sorting2` ist A11, `sorting` ist A12). Schlüssel ist
-der Code `LUxx.Ayy` in der Wiki-Überschrift. Trägt ein Code mehrere Seiten,
-entscheidet der `OVERRIDES`-Block am Kopf des Skripts — sonst wird übersprungen.
+Der Slug führt nicht zwangsläufig zur Zielseite — Nummerierung und Seitennamen
+können auseinanderlaufen. Schlüssel ist ein Code in der Seitenüberschrift; trägt
+ein Code mehrere Seiten, entscheidet der `OVERRIDES`-Block am Kopf des Skripts,
+sonst wird übersprungen.
 
-Wiederholbar. Eine Datei, die kaputtes Python enthält **und** bereits den
-Docstring trägt, meldet `SKIP`: dort lässt sich der bestehende Docstring nicht
-sicher lokalisieren, geschrieben ist er trotzdem schon.
+Das Skript ist auf eine bestimmte Aufgabensammlung zugeschnitten. Wer eine
+andere benutzt, passt die Auflösung am Kopf des Skripts an oder lässt es weg —
+für die Bewertung ist es nicht nötig.
 
----
+## `gh teacher` — Classrooms verwalten
 
-## `scripts/publish-wiki.py` — Wiki-Seiten aktualisieren
+Nicht Teil dieses Repos, aber die Gegenstelle. Vollständige Referenz im
+[Wiki von foundation50/classroom50](https://github.com/foundation50/classroom50/wiki).
 
-Spiegelt [`wiki/`](wiki/) auf die DokuWiki-Instanz. Pfad = Seiten-ID:
-`wiki/howto/git/classroom50/start.txt` → `howto:git:classroom50:start`.
+```bash
+gh extension install foundation50/gh-teacher
+gh auth refresh -h github.com -s admin:org,read:org,repo,workflow
 
+gh teacher classroom list <ORG>
+gh teacher assignment list <ORG> <CLASSROOM>
+gh teacher assignment add <ORG> <CLASSROOM> <SLUG> --name "<SLUG>" --template <OWNER>/<REPO>@main
+gh teacher autograder show <ORG> <CLASSROOM>
+gh teacher autograder set-default <ORG> <CLASSROOM> --from bootstrap/autograder.py
+gh teacher rotate-service-token <ORG>
 ```
-scripts/publish-wiki.py [--apply] [--summary "Text"]
-```
-
-Geschrieben wird nur, was abweicht — ein erneuter Lauf meldet alles als
-`gleich` und hinterlässt keine leeren Versionen. Zugangsdaten aus der Umgebung:
-`DOKUWIKI_TOKEN`, sonst `DOKUWIKI_USER` und `DOKUWIKI_PASSWORD`, dazu optional
-`DOKUWIKI_URL` (Vorgabe `https://wiki.bzz.ch`).
-
-Ein untauglicher API-Token wird **nicht abgelehnt, sondern ignoriert**: die
-Aufrufe laufen als Gast weiter und scheitern erst beim Schreiben mit einer 401,
-die wie ein falsches Passwort aussieht. Das Skript prüft deshalb vorher per
-`core.whoAmI`, als wer es angemeldet ist, gibt das aus und fällt bei totem
-Token auf `core.login` zurück.
