@@ -8,3 +8,4 @@ result.json
 release-body.md
 CLAUDE.md
 .env
+.claude/
