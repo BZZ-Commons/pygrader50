@@ -8,8 +8,8 @@ name: Moodle Sync
 # ihn jede*r Studierende mit einem eigenen Workflow auslesen und damit beliebige
 # Noten setzen.
 #
-# Die Datei ist klassenzimmer-neutral: bleibt die Eingabe "classroom" leer,
-# werden alle Klassenzimmer-Ordner des Config-Repos übertragen (jeder Ordner mit
+# Die Datei ist classroom-neutral: bleibt die Eingabe "classroom" leer,
+# werden alle Classroom-Ordner des Config-Repos übertragen (jeder Ordner mit
 # einer scores.json). Ein Config-Repo mit mehreren Klassen braucht also keine
 # zweite Kopie dieses Workflows.
 #
@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       classroom:
-        description: "Klassenzimmer (Ordner im Config-Repo); leer = alle"
+        description: "Classroom (Ordner im Config-Repo); leer = alle"
         required: false
       assignment:
         description: "Nur dieses Assignment (leer = alle)"
@@ -77,7 +77,7 @@ jobs:
           DRY_RUN: ${{ github.event.inputs.dry_run }}
           FORCE: ${{ github.event.inputs.force }}
         run: |
-          # Kein `set -e`: ein gescheitertes Klassenzimmer soll die übrigen nicht
+          # Kein `set -e`: ein gescheitertes Classroom soll die übrigen nicht
           # verhindern. Der Exit-Code wird am Ende zusammengefasst.
           set -uo pipefail
 
@@ -85,7 +85,7 @@ jobs:
             CLASSROOMS="$CLASSROOM"
           else
             # Jeder Ordner der obersten Ebene mit einer scores.json ist ein
-            # Klassenzimmer. Ohne Treffer hat "Collect Scores" noch nie gelaufen.
+            # Classroom. Ohne Treffer hat "Collect Scores" noch nie gelaufen.
             CLASSROOMS=$(find . -mindepth 2 -maxdepth 2 -name scores.json -not -path './.*' \
                          | sed 's|^\./||; s|/scores\.json$||' | sort)
           fi

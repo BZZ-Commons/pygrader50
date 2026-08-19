@@ -3,7 +3,7 @@
 Zwei Kommandos: eines bewertet, eines überträgt. Dazu drei Wartungsskripte.
 
 Alle Kommandos sind classroom-neutral — es steckt nirgends ein Modul- oder
-Klassenname im Code. Platzhalter siehe [Übersicht](README.md#platzhalter).
+Classroom-Name im Code. Platzhalter siehe [Übersicht](README.md#platzhalter).
 
 ## `python -m pygrader50` — bewerten
 

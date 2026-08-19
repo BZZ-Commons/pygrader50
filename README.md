@@ -16,7 +16,7 @@ python -m pygrader50.moodle    überträgt die Punkte   (läuft im Config-Repo)
 ## Dokumentation
 
 Alles Weitere steht in **[docs/](docs/)** — schulunabhängig, mit Platzhaltern
-statt konkreten Klassennamen.
+statt konkreten Classroom-Namen.
 
 | | |
 |---|---|
