@@ -2,7 +2,8 @@ name: Moodle Sync
 
 # Gehört ins classroom50-Config-Repo (.github/workflows/moodle-sync.yaml).
 # Überträgt die in scores.json gesammelten Punkte nach Moodle — manuell per
-# Knopfdruck oder nachts, nachdem "Collect Scores" gelaufen ist.
+# Knopfdruck oder nachts. Der Nachtlauf stösst "Collect Scores" selbst an und
+# wartet darauf, statt sich auf einen Cron dort zu verlassen.
 #
 # Der Moodle-Token liegt bewusst HIER und nicht in den Studi-Repos: dort könnte
 # ihn jede*r Studierende mit einem eigenen Workflow auslesen und damit beliebige
@@ -38,7 +39,7 @@ on:
         description: "Auch unveränderte Noten erneut übertragen"
         type: boolean
         default: false
-  # Nachtlauf, 40 Minuten nach "Collect Scores" (17 4 * * *).
+  # Nachtlauf. Sammelt selbst ein, siehe den Schritt "Punkte einsammeln".
   schedule:
     - cron: "57 4 * * *"
 
@@ -53,6 +54,53 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
+      # "Collect Scores" hat seit gh-teacher v1.32.0 keinen eigenen Cron mehr
+      # (Upstream #670), und ein von Hand nachgetragener würde beim nächsten
+      # Skeleton-Refresh wieder verschwinden. Der Nachtlauf stösst das Sammeln
+      # deshalb hier an und wartet, bevor er scores.json liest — sonst überträgt
+      # er den Stand des Vortags, ohne dass etwas rot wird.
+      #
+      # Nicht mit github.token: von GITHUB_TOKEN ausgelöste Events starten keinen
+      # neuen Workflow-Run. Der Service-Token braucht Actions: Read and write.
+      #
+      # Scheitert das Anstossen oder das Sammeln, läuft der Übertrag mit dem
+      # vorhandenen Stand weiter — alte Punkte sind besser als gar keine.
+      - name: Punkte einsammeln
+        if: github.event_name == 'schedule'
+        timeout-minutes: 20
+        env:
+          GH_TOKEN: ${{ secrets.CLASSROOM50_SERVICE_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+
+          if ! gh workflow run collect-scores.yaml --repo "$REPO"; then
+            echo "::warning::\"Collect Scores\" liess sich nicht anstossen — übertrage den vorhandenen Stand."
+            exit 0
+          fi
+
+          # Die Run-ID erscheint erst ein paar Sekunden nach dem Dispatch.
+          RUN_ID=""
+          for _ in $(seq 1 12); do
+            sleep 5
+            RUN_ID=$(gh run list --repo "$REPO" --workflow collect-scores.yaml \
+                       --event workflow_dispatch --limit 5 \
+                       --json databaseId,status \
+                       --jq 'map(select(.status != "completed")) | first | .databaseId // empty')
+            [ -n "$RUN_ID" ] && break
+          done
+
+          if [ -z "$RUN_ID" ]; then
+            echo "::warning::Kein laufender Collect-Run gefunden — übertrage den vorhandenen Stand."
+            exit 0
+          fi
+
+          if ! gh run watch "$RUN_ID" --repo "$REPO" --interval 15 --exit-status; then
+            echo "::warning::\"Collect Scores\" ist gescheitert — übertrage den vorhandenen Stand."
+          fi
+
+      # Nach dem Sammeln auschecken: "Collect Scores" committet scores.json nach
+      # main, ein früherer Checkout hätte den alten Stand.
       - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
