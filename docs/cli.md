@@ -68,20 +68,65 @@ Liest `scores.json` aus dem Config-Repo und schickt die Punkte an Moodle. Je
 Kombination aus Aufgabe und Person geht die **neueste** Abgabe raus.
 
 ```
-python -m pygrader50.moodle SCORES [Optionen]
+python -m pygrader50.moodle (--classroom NAME... | --all-classrooms) [Optionen]
+```
+
+### Der Scope ist fail-closed
+
+Welche Classrooms angefasst werden, **muss ausgesprochen werden**. Ein fehlendes
+oder leeres Argument bricht ab, statt alles zu übertragen.
+
+| Aufruf | Wirkung |
+|---|---|
+| `--classroom X` | genau X |
+| `--classroom X --classroom Y` | X und Y |
+| `--all-classrooms` | alle Ordner mit einer `scores.json` |
+| *keins von beiden* | **Abbruch, Exit 2** — es wird nichts übertragen |
+| beides zusammen | Abbruch, Exit 2 (Widerspruch) |
+| `--classroom ""` | Abbruch, Exit 2 — leer zählt als nicht gesetzt |
+| `--classroom TIPPFEHLER` | Abbruch, Exit 2 — ein unbekanntes Classroom ist ein Fehler, kein leerer Treffer |
+| `--classroom X`, Ordner da, `scores.json` fehlt | Abbruch, **Exit 1** — richtig gerufen, Repo noch nicht so weit |
+
+»Alle« bleibt möglich — der Nachtlauf braucht es. Es ist nur nicht mehr das, was
+Schweigen bedeutet. Der Grund: in GitHub Actions kommt eine nicht ausgefüllte
+Eingabe als leerer String an, ununterscheidbar von einer bewusst geleerten. Wer
+den Input vergisst, bekäme sonst nicht »nichts passiert«, sondern »alles
+passiert« — und der Übertrag schreibt in eine fremde Moodle-Instanz und setzt
+dabei eine dort von Hand korrigierte Note zurück. Das nimmt kein zweiter Lauf
+zurück.
+
+Ein *vorhandenes* Classroom ohne zu übertragende Noten ist dagegen ein normaler
+Lauf mit Exit 0.
+
+`--assignment` und `--user` dürfen weiter leer bleiben und heissen dann »alle«.
+Sie verengen **innerhalb** des gewählten Classrooms; ihr weitester Fall ist
+durch die äussere Grenze schon gedeckt. Die Regel gilt nur für die äusserste
+Scope-Dimension — die, die bestimmt, wessen Daten überhaupt angefasst werden.
+
+Die erste Ausgabezeile nennt den aufgelösten Scope, und in Actions steht er
+zusätzlich in der Job-Summary:
+
+```
+Scope: 2 Classroom(s) — m323-ix24, m450-ix25 | echter Übertrag
 ```
 
 ### Argumente und Optionen
 
 | Option | Wirkung |
 |---|---|
-| `SCORES` | Pfad zu `<CLASSROOM>/scores.json` (Pflicht) |
+| `--classroom NAME` | Classroom-Ordner im Config-Repo; **wiederholbar** |
+| `--all-classrooms` | alle Ordner mit einer `scores.json` |
+| `--config-repo PFAD` | Wurzel des Config-Repos (Vorgabe: `.`) |
 | `--assignment SLUG` | nur diese Aufgabe |
 | `--user LOGIN` | nur diesen GitHub-Login ¹ |
-| `--state PFAD` | Zustandsfile; ohne Angabe wird jedes Mal alles übertragen |
 | `--force` | auch Unverändertes erneut senden |
 | `--dry-run` | nur anzeigen, nichts senden; funktioniert ohne Zugangsdaten |
 | `--no-feedback` | ohne Feedback-Text (spart einen API-Aufruf pro Abgabe) |
+
+Das Zustandsfile ist immer `<CLASSROOM>/moodle-state.json` — es gibt keine
+Option dafür. Eine einzelne Datei direkt zu benennen geht bewusst nicht: sonst
+gäbe es zwei Antworten auf die Frage, was ein Classroom ist, und nur eine davon
+ginge durch die Scope-Prüfung.
 
 ¹ Muss im Moodle-Kurs eingeschrieben sein. Der eigene Lehrer-Account ist es
 meist nicht — Moodle antwortet dann `No matching assignment found`, obwohl die
@@ -133,46 +178,68 @@ Nachbewertung derselben Abgabe geht also erneut raus. Nur erfolgreiche
 | Code | Bedeutung |
 |---|---|
 | `0` | alles übertragen oder übersprungen |
-| `1` | mindestens eine Übertragung scheiterte, oder Zugangsdaten/Datei fehlen |
+| `1` | mindestens eine Übertragung scheiterte, oder die Umgebung reicht nicht — fehlende Zugangsdaten, unlesbare `scores.json`, oder eine `scores.json`, die es noch nicht gibt (Collect Scores lief nie) |
+| `2` | der Aufruf war unklar — Scope fehlt, widersprüchlich, leer oder unbekannt |
 
-Ein Fehler bricht den Lauf **nicht** ab: die übrigen Abgaben gehen trotzdem raus.
+`2` heisst immer: **es wurde nichts gesendet.** Der Unterschied zu `1` ist der
+zwischen »falsch gerufen« und »richtig gerufen, aber es ging nicht«. Ein Repo
+ohne `scores.json` fällt bewusst in `1`: der Aufruf war korrekt, das Repo ist
+nur noch nicht so weit.
+
+Ein Fehler bricht den Lauf **nicht** ab: die übrigen Abgaben gehen trotzdem
+raus, und ein Classroom mit unlesbarer `scores.json` stoppt die übrigen nicht.
+Der Exit-Code fasst am Ende über alle Classrooms zusammen.
 
 ### Beispiele
 
+Alle Beispiele aus der Wurzel des Config-Repos:
+
 ```bash
-# Trockenlauf über alles, ohne Zugangsdaten
-python -m pygrader50.moodle <CLASSROOM>/scores.json --dry-run --no-feedback
+# Trockenlauf über ein Classroom, ohne Zugangsdaten
+python -m pygrader50.moodle --classroom <CLASSROOM> --dry-run --no-feedback
 
 # Eine einzelne Person nachtragen
-python -m pygrader50.moodle <CLASSROOM>/scores.json --user <LOGIN>
+python -m pygrader50.moodle --classroom <CLASSROOM> --user <LOGIN>
 
 # Eine Aufgabe nach einer Nachbewertung komplett neu schicken
-python -m pygrader50.moodle <CLASSROOM>/scores.json --assignment <SLUG> --force
+python -m pygrader50.moodle --classroom <CLASSROOM> --assignment <SLUG> --force
 
-# Wie der Nachtlauf
-python -m pygrader50.moodle <CLASSROOM>/scores.json \
-  --state <CLASSROOM>/moodle-state.json
+# Zwei Klassen desselben Config-Repos
+python -m pygrader50.moodle --classroom <CLASSROOM-A> --classroom <CLASSROOM-B>
+
+# Wie der Nachtlauf — "alle" ausdrücklich
+python -m pygrader50.moodle --all-classrooms
 ```
 
-Ohne lokalen Klon des Config-Repos reicht die Datei allein:
+Ohne lokalen Klon des Config-Repos genügt es, die Ablage nachzubauen:
 
 ```bash
+mkdir -p <CLASSROOM>
 gh api repos/<ORG>/classroom50/contents/<CLASSROOM>/scores.json \
-   -H 'Accept: application/vnd.github.raw' > scores.json
-GH_TOKEN=$(gh auth token) python -m pygrader50.moodle scores.json --dry-run
+   -H 'Accept: application/vnd.github.raw' > <CLASSROOM>/scores.json
+GH_TOKEN=$(gh auth token) python -m pygrader50.moodle --classroom <CLASSROOM> --dry-run
 ```
+
+Der Ordner muss sein: es gibt nur **eine** Aufrufform, und die erwartet die
+Ablage des Config-Repos. Dafür geht jeder Aufruf durch dieselbe Scope-Prüfung.
 
 ### Manuell auslösen
 
 Im Config-Repo unter **Actions → Moodle Sync → Run workflow**: Classroom,
-optional Aufgabe und Login, dazu die Schalter `dry_run` und `force`. Bleibt der
-Classroom leer, laufen alle Ordner mit einer `scores.json`. Der Workflow liegt
-hier als [`classroom50/moodle-sync.yaml`](../classroom50/moodle-sync.yaml),
-Einbau siehe [Einrichtung](einrichtung.md#61-workflow-einbauen).
+optional Aufgabe und Login, dazu die Schalter `all_classrooms`, `dry_run` und
+`force`. Ein **leeres** Classroom-Feld heisst nicht »alle« — der Lauf bricht
+dann mit Exit 2 ab, ohne etwas zu senden. Für alle Klassen den Schalter
+`all_classrooms` setzen. Der Workflow liegt hier als
+[`classroom50/moodle-sync.yaml`](../classroom50/moodle-sync.yaml), Einbau siehe
+[Einrichtung](einrichtung.md#61-workflow-einbauen).
 
 ```bash
 gh workflow run moodle-sync.yaml --repo <ORG>/classroom50 \
   -f classroom=<CLASSROOM> -f dry_run=true
+
+# alle Klassen des Config-Repos
+gh workflow run moodle-sync.yaml --repo <ORG>/classroom50 \
+  -f all_classrooms=true -f dry_run=true
 ```
 
 ## `scripts/remove-legacy-classroom-yml.sh` — migrieren

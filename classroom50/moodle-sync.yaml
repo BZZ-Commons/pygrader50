@@ -9,10 +9,19 @@ name: Moodle Sync
 # ihn jede*r Studierende mit einem eigenen Workflow auslesen und damit beliebige
 # Noten setzen.
 #
-# Die Datei ist classroom-neutral: bleibt die Eingabe "classroom" leer,
-# werden alle Classroom-Ordner des Config-Repos übertragen (jeder Ordner mit
-# einer scores.json). Ein Config-Repo mit mehreren Klassen braucht also keine
-# zweite Kopie dieses Workflows.
+# Warum der Übertragungs-Zustand */moodle-state.json so geschützt wird: geht er
+# verloren, schickt der nächste Lauf bereits übertragene Noten erneut und
+# überschreibt damit eine in Moodle von Hand korrigierte Note wieder. Zwei Racer
+# können ihn kosten, siehe "concurrency" (Racer 1) und "Zustand committen"
+# (Racer 2).
+#
+# Die Datei ist classroom-neutral: ein Config-Repo mit mehreren Klassen braucht
+# keine zweite Kopie. Welche Classrooms angefasst werden, muss aber ausgesprochen
+# werden — entweder "classroom" oder der Schalter "all_classrooms". Ein leeres
+# Feld heisst NICHT mehr "alle": GitHub Actions liefert eine nicht ausgefüllte
+# Eingabe als leeren String, ununterscheidbar von einer bewusst geleerten, und
+# der weiteste Radius darf nicht der Vorgabezustand sein. pygrader50 löst den
+# Scope fail-closed auf und bricht ohne Angabe mit Exit 2 ab.
 #
 # Secrets/Variablen im classroom50-Repo:
 #   secrets.MOODLE_TOKEN   Webservice-Token
@@ -23,8 +32,12 @@ on:
   workflow_dispatch:
     inputs:
       classroom:
-        description: "Classroom (Ordner im Config-Repo); leer = alle"
+        description: "Classroom (Ordner im Config-Repo) — leer heisst NICHT alle"
         required: false
+      all_classrooms:
+        description: "Alle Classrooms des Config-Repos übertragen"
+        type: boolean
+        default: false
       assignment:
         description: "Nur dieses Assignment (leer = alle)"
         required: false
@@ -46,8 +59,20 @@ on:
 permissions:
   contents: write       # schreibt den Übertragungs-Zustand zurück
 
+# Racer 1: dieser Workflow gegen sich selbst. Eine Gruppe für alle Läufe, nicht
+# eine je Classroom — sie mutieren dieselbe Ablage */moodle-state.json im selben
+# Repo und pushen sie zurück; scope-abhängige Gruppen liessen den nächtlichen und
+# einen classroom-weiten Lauf gleichzeitig laufen. Folge eines verlorenen
+# Zustands siehe Kopfkommentar.
+#
+# Was das kostet, genau gesagt: GitHub hält je Gruppe nur *einen* wartenden Lauf.
+# Läuft der Nachtlauf (bis ~25 min, inkl. Sammeln) und werden zwei manuelle
+# Läufe angestossen, wird der erste wartende **abgebrochen**, nicht eingereiht.
+# Das ist ungefährlich — ein abgebrochener wartender Lauf hat nie etwas gesendet
+# — aber er verschwindet still. Wer einen manuellen Lauf vermisst, startet ihn
+# erneut. `cancel-in-progress: false` schützt nur den *laufenden*.
 concurrency:
-  group: moodle-sync-${{ github.event.inputs.classroom || 'all' }}
+  group: moodle-sync
   cancel-in-progress: false
 
 jobs:
@@ -107,10 +132,13 @@ jobs:
         with:
           python-version: "3.14"
 
-      # Auf denselben Tag pinnen wie bootstrap/autograder.py, damit Bewertung
-      # und Übertrag aus derselben Version stammen.
+      # Dieser Pin und der in bootstrap/autograder.py dürfen auseinanderlaufen:
+      # sie sind zwei getrennte Rollout-Sperren. Diese hier zieht mit jeder
+      # Änderung an moodle.py mit; die in bootstrap nur mit einer Änderung am
+      # Bewertungspfad, weil sie ein `set-default` und damit einen Eingriff in
+      # laufende Klassen kostet. moodle.py läuft im Bewertungsjob gar nicht.
       - name: Install pygrader50
-        run: pip install "pygrader50 @ git+https://github.com/BZZ-Commons/pygrader50@v2.2.2"
+        run: pip install "pygrader50 @ git+https://github.com/BZZ-Commons/pygrader50@v2.3.0"
 
       - name: Übertragen
         env:
@@ -120,43 +148,41 @@ jobs:
           # Liest die Release-Bodies der Studi-Repos für den Feedback-Text.
           GH_TOKEN: ${{ secrets.CLASSROOM50_SERVICE_TOKEN }}
           CLASSROOM: ${{ github.event.inputs.classroom }}
+          # Die eine Entscheidung, die hier bleibt — und zwar die weitende:
+          # "Nachtlauf heisst alle Classrooms" ist Deployment-Politik dieses
+          # Repos, nicht Programmlogik, und kann deshalb nicht nach Python.
+          # Alles andere reicht der Step nur durch.
+          # `== 'true'` explizit: `github.event.inputs.*` liefert Strings, und
+          # GitHub castet jeden nicht-leeren String zu true — ohne den Vergleich
+          # wäre die abgewählte Checkbox ("false") truthy.
+          ALL_CLASSROOMS: ${{ github.event_name == 'schedule' || github.event.inputs.all_classrooms == 'true' }}
           ASSIGNMENT: ${{ github.event.inputs.assignment }}
           USER_FILTER: ${{ github.event.inputs.user }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
           FORCE: ${{ github.event.inputs.force }}
         run: |
-          # Kein `set -e`: ein gescheitertes Classroom soll die übrigen nicht
-          # verhindern. Der Exit-Code wird am Ende zusammengefasst.
           set -uo pipefail
 
-          if [ -n "${CLASSROOM:-}" ]; then
-            CLASSROOMS="$CLASSROOM"
-          else
-            # Jeder Ordner der obersten Ebene mit einer scores.json ist ein
-            # Classroom. Ohne Treffer hat "Collect Scores" noch nie gelaufen.
-            CLASSROOMS=$(find . -mindepth 2 -maxdepth 2 -name scores.json -not -path './.*' \
-                         | sed 's|^\./||; s|/scores\.json$||' | sort)
-          fi
+          # Die Shell verengt hier nur noch, sie entscheidet nicht: welche
+          # Classrooms angefasst werden, löst pygrader50 auf — dort ist die Regel
+          # testbar und existiert einmal statt in jeder Kopie dieses Workflows.
+          # Kommt weder --classroom noch --all-classrooms an, bricht es mit
+          # Exit 2 ab, statt alles zu übertragen.
+          #
+          # Bewusst if-Blöcke statt `[ … ] && ARGS+=…`: unter `set -e` würde ein
+          # fehlschlagender letzter Test den Step rot färben. Und das Array wird
+          # nicht leer angelegt — `"${ARGS[@]}"` bräuchte sonst bash >= 4.4.
+          ARGS=("--config-repo" ".")
+          if [ "${ALL_CLASSROOMS:-false}" = "true" ]; then ARGS+=("--all-classrooms"); fi
+          if [ -n "${CLASSROOM:-}" ];   then ARGS+=("--classroom" "$CLASSROOM"); fi
+          if [ -n "${ASSIGNMENT:-}" ];  then ARGS+=("--assignment" "$ASSIGNMENT"); fi
+          if [ -n "${USER_FILTER:-}" ]; then ARGS+=("--user" "$USER_FILTER"); fi
+          if [ "${DRY_RUN:-false}" = "true" ]; then ARGS+=("--dry-run"); fi
+          if [ "${FORCE:-false}" = "true" ];   then ARGS+=("--force"); fi
 
-          if [ -z "$CLASSROOMS" ]; then
-            echo "::error::keine scores.json gefunden — lief Collect Scores schon?"
-            exit 1
-          fi
-
-          rc=0
-          for room in $CLASSROOMS; do
-            echo "::group::$room"
-            # Bewusst if-Blöcke statt `[ … ] && ARGS+=…`: unter `set -e` würde ein
-            # fehlschlagender letzter Test den Step rot färben.
-            ARGS=("$room/scores.json" "--state" "$room/moodle-state.json")
-            if [ -n "${ASSIGNMENT:-}" ];  then ARGS+=("--assignment" "$ASSIGNMENT"); fi
-            if [ -n "${USER_FILTER:-}" ]; then ARGS+=("--user" "$USER_FILTER"); fi
-            if [ "${DRY_RUN:-false}" = "true" ]; then ARGS+=("--dry-run"); fi
-            if [ "${FORCE:-false}" = "true" ];   then ARGS+=("--force"); fi
-            python -m pygrader50.moodle "${ARGS[@]}" || rc=1
-            echo "::endgroup::"
-          done
-          exit $rc
+          # Ein gescheitertes Classroom stoppt die übrigen nicht; der Exit-Code
+          # wird in pygrader50 über alle Classrooms zusammengefasst.
+          python -m pygrader50.moodle "${ARGS[@]}"
 
       - name: Zustand committen
         # always(): auch wenn einzelne Übertragungen scheiterten, sollen die
@@ -164,11 +190,38 @@ jobs:
         if: always() && github.event.inputs.dry_run != 'true'
         run: |
           set -euo pipefail
-          if [ -n "$(git status --porcelain '*/moodle-state.json' 2>/dev/null)" ]; then
-            git add '*/moodle-state.json'
-            git -c user.name=classroom50-bot -c user.email=bot@classroom50 \
-                commit -m "[Moodle] Übertragungs-Zustand aktualisiert"
-            git push
-          else
+          BOT=(-c user.name=classroom50-bot -c user.email=bot@classroom50)
+
+          if [ -z "$(git status --porcelain '*/moodle-state.json' 2>/dev/null)" ]; then
             echo "keine Änderungen am Übertragungs-Zustand"
+            exit 0
           fi
+
+          git add '*/moodle-state.json'
+          git "${BOT[@]}" commit -m "[Moodle] Übertragungs-Zustand aktualisiert"
+
+          # Racer 2: "Collect Scores", ein anderer Workflow, der scores.json
+          # ebenfalls nach main committet. Die concurrency-Gruppe erreicht ihn
+          # nicht — er ist eine Skeleton-Datei und verlöre jeden dort
+          # nachgetragenen Schlüssel beim nächsten Dashboard-Refresh. Läuft er,
+          # während dieser Job überträgt, ist unser Checkout veraltet und
+          # `git push` scheitert non-fast-forward: unter `set -e` mit verlorenem
+          # Zustand (Folge siehe Kopfkommentar). Deshalb rebasen und erneut.
+          #
+          # Zwei Rebases, drei Pushes: der letzte steht ausserhalb der Schleife,
+          # weil er rot werden darf.
+          # Der Rebase steht bewusst in einem `if`: unter `set -e` würde ein
+          # gescheiterter Rebase den Step sofort beenden — mitten in der
+          # Schleife, mit halb aufgeräumtem Rebase-Zustand und ungepushtem
+          # Commit. Genau der Datenverlust, gegen den die Schleife da ist.
+          for attempt in 1 2; do
+            if git push; then exit 0; fi
+            echo "::warning::Push abgelehnt (Versuch $attempt) — rebase und erneut."
+            if ! git "${BOT[@]}" pull --rebase --autostash; then
+              git rebase --abort || true
+              echo "::error::Rebase gescheitert — der Übertragungs-Zustand bleibt ungepusht."
+              echo "::error::Von Hand nachziehen, sonst schickt der nächste Lauf alles erneut."
+              exit 1
+            fi
+          done
+          git push

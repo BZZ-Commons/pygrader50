@@ -4,6 +4,7 @@ The Actions log renders ANSI codes, so the console output stays colored while
 `release-body.md` (Markdown) never sees them.
 """
 
+import os
 import sys
 
 
@@ -58,6 +59,23 @@ def fail(message: str) -> None:
 def ok(message: str) -> None:
     """Print a success line in green."""
     print(f'{bcolors.OKGREEN}{bcolors.BOLD}{message}{bcolors.ENDC}')
+
+
+def step_summary(text: str) -> None:
+    """Append `text` to `$GITHUB_STEP_SUMMARY`, if the runner set it.
+
+    Lives next to the `::warning::` / `::error::` writers above: this is the
+    same layer — output that only GitHub Actions reads. A local run has the
+    variable unset and simply writes nothing.
+    """
+    path = os.environ.get('GITHUB_STEP_SUMMARY')
+    if not path:
+        return
+    try:
+        with open(path, 'a', encoding='UTF-8') as handle:
+            handle.write(text)
+    except OSError as exc:
+        warn(f'Job-Summary nicht schreibbar ({exc})')
 
 
 def points(scored: float, maximum: float) -> None:

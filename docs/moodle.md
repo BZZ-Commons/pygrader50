@@ -110,21 +110,60 @@ Ein Zustandsfile `<CLASSROOM>/moodle-state.json` merkt sich, was schon
 übertragen wurde. Übersprungen wird nur, wenn Abgabe **und** Punktzahl identisch
 sind — eine Nachbewertung derselben Abgabe geht also erneut raus.
 
+Alle Läufe des Workflows teilen sich **eine** Concurrency-Gruppe, also auch der
+nächtliche und ein von Hand ausgelöster. Sie mutieren dieselbe Ablage
+`*/moodle-state.json` und pushen sie zurück; liefen sie gleichzeitig, scheiterte
+der zweite Push non-fast-forward. Und verlorener Zustand heisst: der nächste
+Lauf schickt bereits übertragene Noten erneut und überschreibt eine in Moodle
+von Hand korrigierte Note wieder.
+
+> **Ein wartender Lauf kann still verschwinden.** GitHub hält je Gruppe nur
+> *einen* wartenden Lauf. Läuft der Nachtlauf und werden zwei manuelle Läufe
+> angestossen, wird der erste wartende abgebrochen statt eingereiht. Gefährlich
+> ist das nicht — ein abgebrochener wartender Lauf hat nie etwas gesendet — aber
+> wer einen manuellen Lauf vermisst, startet ihn einfach erneut.
+
 ## Von Hand auslösen
 
 Im Config-Repo unter **Actions → Moodle Sync → Run workflow**. Eingaben:
-Classroom, optional Aufgabe und Login, dazu die Schalter `dry_run` und `force`.
-Bleibt der Classroom leer, laufen **alle** Ordner mit einer `scores.json`.
+Classroom, optional Aufgabe und Login, dazu die Schalter `all_classrooms`,
+`dry_run` und `force`.
+
+> **Ein leeres Classroom-Feld heisst nicht »alle«.** Der Lauf bricht dann mit
+> Exit 2 ab und sendet nichts. Für alle Klassen des Config-Repos den Schalter
+> `all_classrooms` setzen — »alle« muss ausgesprochen werden.
+>
+> Der Grund: GitHub Actions liefert eine nicht ausgefüllte Eingabe als leeren
+> String, ununterscheidbar von einer bewusst geleerten. Wer den Input vergisst,
+> bekäme sonst nicht »nichts passiert«, sondern »alles passiert« — an der Stelle
+> mit der grössten Wirkung. Der Übertrag schreibt in Moodle und setzt dabei eine
+> dort von Hand korrigierte Note zurück; ein zweiter Lauf nimmt das nicht zurück.
+>
+> Ein Tippfehler im Classroom-Namen bricht ebenfalls ab, statt still nichts zu
+> tun. Ein *vorhandenes* Classroom ohne neue Noten ist dagegen ein grüner Lauf.
 
 ```bash
 gh workflow run moodle-sync.yaml --repo <ORG>/classroom50 \
   -f classroom=<CLASSROOM> -f dry_run=true
+
+# alle Klassen des Config-Repos — ausdrücklich
+gh workflow run moodle-sync.yaml --repo <ORG>/classroom50 \
+  -f all_classrooms=true -f dry_run=true
 ```
+
+Die erste Zeile des Übertragen-Schritts nennt den aufgelösten Scope, und die
+Job-Summary wiederholt ihn samt Zählern je Classroom. Ein zu weiter Lauf fällt
+damit oben im Log auf und nicht erst in Moodle.
 
 Trockenlauf-Ausgabe:
 
 ```
-Moodle-Übertrag: 2 Abgaben
+Scope: 1 Classroom(s) — <CLASSROOM> | Trockenlauf
+
+################################################################################
+Classroom <CLASSROOM>
+################################################################################
+2 Abgaben
 [dry-run] <SLUG> / anna:  5/7
 [dry-run] <SLUG> / bruno: 7/7
 übertragen: 2 | unverändert: 0 | fehlgeschlagen: 0
@@ -137,10 +176,16 @@ Moodle-Übertrag: 2 Abgaben
 ## Lokal prüfen, ohne Zugangsdaten
 
 ```bash
+mkdir -p <CLASSROOM>
 gh api repos/<ORG>/classroom50/contents/<CLASSROOM>/scores.json \
-   -H 'Accept: application/vnd.github.raw' > scores.json
-GH_TOKEN=$(gh auth token) python -m pygrader50.moodle scores.json --dry-run
+   -H 'Accept: application/vnd.github.raw' > <CLASSROOM>/scores.json
+GH_TOKEN=$(gh auth token) python -m pygrader50.moodle --classroom <CLASSROOM> --dry-run
 ```
+
+Der Ordner muss sein: es gibt nur **eine** Aufrufform, und die erwartet die
+Ablage des Config-Repos. Dafür geht jeder Aufruf durch dieselbe Scope-Prüfung.
+
+Im geklonten Config-Repo entfallen die ersten beiden Zeilen.
 
 Alle Optionen: [CLI-Referenz](cli.md#python--m-pygrader50moodle-übertragen).
 
@@ -153,6 +198,8 @@ Alle Optionen: [CLI-Referenz](cli.md#python--m-pygrader50moodle-übertragen).
 | `Ungültiger Parameterwert` | kommt aus dem Moodle-Kern, nicht aus dem Plugin — meist eine kaputte Endpunkt-URL, siehe `MOODLE_FUNCTION` oben |
 | `keine XML-Antwort erhalten` | falsche `MOODLE_URL` oder ungültiger Token — Moodle liefert eine Login-Seite |
 | Note kommt nicht an, Log sagt „unverändert" | Zustandsfile hält sie für erledigt — mit `force` erneut auslösen |
+| `Scope fehlt`, Exit 2, nichts gesendet | Classroom-Feld leer gelassen — für alle Klassen `all_classrooms` setzen |
+| `unbekanntes Classroom`, Exit 2 | Tippfehler im Classroom-Namen; die Meldung listet die vorhandenen auf |
 | Nachtlauf jede Nacht rot, immer dieselbe Person | Karteileichen-Eintrag in `scores.json`, siehe [Betrieb](betrieb.md#scoresjson-wird-nie-aufgeräumt) |
 
 Die Plugin-eigenen Fehler (`no_user`, `no_assignment`, `overdue`) kommen als

@@ -167,6 +167,10 @@ gh workflow run moodle-sync.yaml --repo <ORG>/classroom50 \
   -f classroom=<CLASSROOM> -f assignment=<SLUG> -f force=true
 ```
 
+> `classroom` **nicht** weglassen: ein leeres Feld heisst nicht »alle«, sondern
+> bricht mit Exit 2 ab. Für alle Klassen des Config-Repos `all_classrooms=true`
+> setzen. Siehe [Moodle](moodle.md#von-hand-auslösen).
+
 ## Betriebsfallen
 
 Vier Verhaltensweisen der Classroom-50-Seite, die man einmal wissen muss.

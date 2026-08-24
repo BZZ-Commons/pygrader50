@@ -166,10 +166,15 @@ cp classroom50/moodle-sync.yaml <config-repo>/.github/workflows/moodle-sync.yaml
 Eigener Dateiname, keine bestehende Datei anfassen: `gh teacher` überschreibt
 die mitgelieferten Skeleton-Workflows bei einem Refresh.
 
-Die Datei ist classroom-neutral. Bleibt die Eingabe `classroom` leer, wird jeder
-Ordner mit einer `scores.json` übertragen — ein Config-Repo mit mehreren Klassen
-braucht keine zweite Kopie. Anzupassen ist nur der gepinnte Tag, falls er von
-`bootstrap/autograder.py` abweicht.
+Die Datei ist classroom-neutral: ein Config-Repo mit mehreren Klassen braucht
+keine zweite Kopie. Welche Klassen ein Lauf anfasst, muss aber ausgesprochen
+werden — Eingabe `classroom` **oder** Schalter `all_classrooms`. Ein leeres Feld
+heisst nicht »alle«, sondern bricht mit Exit 2 ab; siehe
+[Moodle](moodle.md#von-hand-auslösen). Der Nachtlauf setzt `--all-classrooms`
+selbst.
+
+Anzupassen ist nur der gepinnte Tag, falls er von `bootstrap/autograder.py`
+abweicht.
 
 ### 6.2 Zugangsdaten, Moodle-Seite, erster Lauf
 
@@ -178,7 +183,8 @@ Vollständig unter [Moodle](moodle.md). Kurz:
 1. Secret `MOODLE_TOKEN` und Variable `MOODLE_URL` im **Config-Repo** setzen.
 2. In Moodle je Aufgabe eine Aktivität *External Assignment* mit dem Slug als Namen.
 3. Das Profilfeld mit dem GitHub-Login bei allen Teilnehmenden füllen lassen.
-4. **Actions → Moodle Sync → Run workflow** mit `dry_run`, Ausgabe prüfen.
+4. **Actions → Moodle Sync → Run workflow** mit `classroom` und `dry_run`,
+   Ausgabe prüfen — die erste Zeile nennt den aufgelösten Scope.
 5. Dasselbe ohne `dry_run`. Danach liegt `<CLASSROOM>/moodle-state.json` im Repo.
 
 > Ein Trockenlauf baut **nie** einen Endpunkt und prüft deshalb weder URL noch

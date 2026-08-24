@@ -54,6 +54,10 @@ Symptom → Ursache. Ausführliche Erklärungen stehen auf den verlinkten Seiten
 | Noten kommen nicht an, Log sagt „unverändert" | Zustandsfile hält sie für erledigt — mit `force` erneut auslösen |
 | Nachtlauf jede Nacht rot, immer dieselbe Person | Karteileichen-Eintrag in `scores.json` |
 | Trockenlauf grün, echter Lauf fällt um | Ein Trockenlauf baut nie einen Endpunkt und prüft weder URL noch Token |
+| `Scope fehlt`, Exit 2, nichts gesendet | Classroom-Feld leer gelassen. Leer heisst **nicht** „alle" — für alle Klassen `all_classrooms=true` setzen |
+| `unbekanntes Classroom`, Exit 2 | Tippfehler im Classroom-Namen; die Meldung listet die vorhandenen auf |
+| Manueller Lauf taucht nie auf | Er wartete auf den Nachtlauf und wurde von einem dritten Lauf verdrängt — GitHub hält je Gruppe nur einen wartenden. Einfach erneut starten |
+| `Rebase gescheitert — der Übertragungs-Zustand bleibt ungepusht` | Jemand hat `*/moodle-state.json` parallel geändert. Der Übertrag **ist** gelaufen, nur der Zustand fehlt im Repo. Von Hand nachziehen, sonst schickt der nächste Lauf alles erneut |
 
 ## Wo nachschauen
 
@@ -67,6 +71,6 @@ Symptom → Ursache. Ausführliche Erklärungen stehen auf den verlinkten Seiten
 gh api repos/<ORG>/classroom50/contents/<CLASSROOM>/scores.json \
    -H 'Accept: application/vnd.github.raw' | jq '.'
 
-# Übertrag trocken nachspielen
-GH_TOKEN=$(gh auth token) python -m pygrader50.moodle scores.json --dry-run
+# Übertrag trocken nachspielen (im geklonten Config-Repo)
+GH_TOKEN=$(gh auth token) python -m pygrader50.moodle --classroom <CLASSROOM> --dry-run
 ```
