@@ -21,7 +21,7 @@ import sys
 # The rollout gate: this line is what every student's run installs. Moving it
 # reaches them on their next push, so it moves between assignments, never in the
 # middle of one, and only together with a `gh teacher autograder set-default`.
-VERSION = 'v2.2.2'
+VERSION = 'v2.3.0'
 PACKAGE = f'pygrader50 @ git+https://github.com/BZZ-Commons/pygrader50@{VERSION}'
 
 
