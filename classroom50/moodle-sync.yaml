@@ -52,9 +52,17 @@ on:
         description: "Auch unveränderte Noten erneut übertragen"
         type: boolean
         default: false
-  # Nachtlauf. Sammelt selbst ein, siehe den Schritt "Punkte einsammeln".
+  # Nachtlauf, 03:00 Zürich. Sammelt selbst ein, siehe "Punkte einsammeln".
+  #
+  # Cron ist bei GitHub immer UTC und kennt keine Sommerzeit. 00:57 UTC ist
+  # 02:57 Zürich (CEST); mit dem üblichen Warteschlangen-Verzug von GitHub
+  # (6–15 min, gemessen) startet der Lauf also kurz nach 03:00. Ab der
+  # Umstellung Ende Oktober (CET) liegt dieselbe Zeile eine Stunde früher,
+  # kurz nach 02:00. Bewusst in Kauf genommen: an der genauen Stunde hängt
+  # nichts, und zwei Crons mit Zeitzonen-Wächter kosteten jede Nacht einen
+  # zweiten, leeren Lauf.
   schedule:
-    - cron: "57 4 * * *"
+    - cron: "57 0 * * *"
 
 permissions:
   contents: write       # schreibt den Übertragungs-Zustand zurück
