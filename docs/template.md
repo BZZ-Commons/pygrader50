@@ -121,10 +121,12 @@ Punkte um — das macht erst pygrader50 mit `Note / 10 * max`.
 6. Als *Template repository* markieren.
 7. Aufgabe registrieren: [Einrichtung → Aufgaben registrieren](einrichtung.md#3-aufgaben-registrieren).
 
-`requirements.txt` wird im Bewertungslauf **nicht** installiert; pygrader50
-bringt pytest und pylint gepinnt selbst mit. Die Datei ist für die lokale Arbeit
-da — die Pins sollten trotzdem zur Engine passen, sonst lintet es auf GitHub
-strenger als zu Hause.
+`requirements.txt` wird im Bewertungslauf **gefiltert** installiert: alles bis
+auf die Pakete der Engine (`pytest`, `pytest-timeout`, `pylint`, `pygrader50`),
+die pygrader50 selbst gepinnt mitbringt. Eine Aufgabe, die `httpx` oder `flask`
+braucht, trägt das Paket hier ein und bekommt es damit auch auf GitHub. Die Pins
+für pytest und pylint gehören trotzdem in die Datei — für die lokale Arbeit —
+und sollten zur Engine passen, sonst lintet es auf GitHub strenger als zu Hause.
 
 ## Pflege
 

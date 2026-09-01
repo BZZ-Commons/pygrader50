@@ -47,9 +47,10 @@ Beim Löschen von `classroom.yml` geht also **keine Funktion verloren**.
 `.github/autograding/` mit `unittests.json`, `lint.json` und `pylintrc` — das
 ist der Fallback, solange nicht jede Aufgabe ein Bundle im Config-Repo hat.
 
-`requirements.txt` und Hilfsskripte stören die Bewertung nicht: pygrader50
-installiert die Studi-Abhängigkeiten bewusst nicht. Für die lokale Arbeit der
-Lernenden zählt die Datei trotzdem, deshalb hält sie ein eigenes Skript aktuell:
+`requirements.txt` und Hilfsskripte stören die Bewertung nicht. Die
+Zusatzpakete aus der Datei installiert pygrader50 sogar — die Pins für pytest
+und pylint überspringt es, dort gelten die eigenen. Für die lokale Arbeit der
+Lernenden zählt die Datei ohnehin, deshalb hält sie ein eigenes Skript aktuell:
 
 ```bash
 scripts/sync-template-pins.py <ORG> <CLASSROOM>            # Trockenlauf
@@ -136,7 +137,7 @@ als nötig. Was hineingehört und was nicht:
 |---|---|
 | `.github/workflows/classroom.yml` | **weg** — ruft den alten Workflow, reicht Secrets durch |
 | `.github/autograding/` | bleibt — Fallback für die Bewertungs-Konfiguration |
-| `requirements.txt` | bleibt, Pins hochziehen — für die lokale Arbeit der Lernenden |
+| `requirements.txt` | bleibt, Pins hochziehen — lokal, und die Zusatzpakete daraus installiert auch der Bewertungslauf |
 | `.python-version` | ergänzen, passend zu `runtime.python` in `assignments.json` |
 | Startcode, Tests | bleiben |
 

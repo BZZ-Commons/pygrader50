@@ -121,13 +121,26 @@ Pro Aufgabe lässt sich beides nicht mischen — pro Klasse schon. Wer Linting
   parsen strikt; alles Menschenlesbare gehört in `release-body.md`.
 - **Kein `$GITHUB_OUTPUT`.** Status und Zusammenfassung leitet der Runner selbst
   aus `result.json` ab — ein Kanal weniger, der auseinanderlaufen kann.
-- **Kein `pip install -r requirements.txt`** aus dem Studi-Repo. pygrader50
-  bringt eigene Abhängigkeiten mit, exakt gepinnt in
-  [`pyproject.toml`](../pyproject.toml). Das hält die Bewertung reproduzierbar:
-  eine neue pylint-Version verschiebt die Lint-Punkte erst, wenn jemand den Pin
-  hochzieht und einen neuen Tag setzt. Transitive Versionen (astroid hinter
-  pylint) bewegen sich weiter innerhalb ihrer eigenen Schranken — der
-  verbleibende Spielraum, klein gegenüber einem pylint-Minor, aber nicht null.
+- **Kein *ungefiltertes* `pip install -r requirements.txt`** aus dem Studi-Repo.
+  Die Datei wird benutzt — es ist dieselbe, die die Lernenden lokal
+  installieren —, aber gefiltert: jede Zeile, die ein Paket der Engine nennt
+  (`pytest`, `pytest-timeout`, `pylint`, `pygrader50`), fällt mit einer Warnung
+  weg. Der Rest wird unter einer Constraints-Datei installiert, die genau diese
+  Pakete auf die laufende Version festnagelt. Eine Aufgabe darf so `httpx` oder
+  `flask` ergänzen, aber `pylint` nicht verschieben.
+
+  Der Grund für die Filterung: `requirements.txt` pinnt pytest und pylint
+  ebenfalls, und `pip` stuft die Werkzeuge, mit denen benotet wird, klaglos
+  zurück — es druckt `ERROR:` und liefert trotzdem Exit 0. Die Pins in
+  [`pyproject.toml`](../pyproject.toml) entschieden dann nichts mehr.
+  Transitive Versionen (astroid hinter pylint) bewegen sich weiter innerhalb
+  ihrer eigenen Schranken — der verbleibende Spielraum, klein gegenüber einem
+  pylint-Minor, aber nicht null.
+
+  Scheitert die Installation (Tippfehler im Pin, Index nicht erreichbar, ein
+  Paket, das der Constraints-Datei widerspricht), warnt der Lauf und bewertet
+  weiter. Das ist kein Infrastrukturfehler: die Abgabe bekommt eine Note und
+  einen lesbaren `ModuleNotFoundError` statt gar keine Rückmeldung.
 
 ## Verantwortlichkeiten
 

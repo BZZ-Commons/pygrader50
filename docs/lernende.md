@@ -37,8 +37,9 @@ source .venv/bin/activate       # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-> Die `requirements.txt` ist für **deine** lokale Arbeit da. Die Bewertung auf
-> GitHub benutzt sie bewusst nicht, sondern eigene, festgelegte Versionen.
+> Die `requirements.txt` ist für **deine** lokale Arbeit da — und die Bewertung
+> auf GitHub installiert dieselben Zusatzpakete daraus. Die Zeilen für `pytest`
+> und `pylint` überspringt sie: dort benutzt sie eigene, festgelegte Versionen.
 > Deshalb kann es vorkommen, dass pylint auf GitHub etwas strenger urteilt als
 > bei dir lokal.
 
@@ -148,6 +149,7 @@ Verspätete Abgaben werden übertragen und im Feedback als solche gekennzeichnet
 | Ich habe abgegeben, aber es lief nichts. | Der Tag muss mit `submit/` beginnen und auf einen Commit zeigen, der schon auf GitHub liegt. Also `git push` vor `git push origin <tag>`. |
 | Beim Pushen kommt ein Konflikt, den ich nicht verursacht habe. | Deine Lehrperson hat den Abgabemodus umgestellt; dabei kam ein Commit in dein Repository. Einmal `git pull`, dann geht es weiter. |
 | Ein Test bricht mit Timeout ab. | Endlosschleife oder wartende Eingabe (`input()`) im Code. Jeder Testfall hat ein eigenes Zeitlimit. |
-| pylint meckert auf GitHub mehr als bei mir. | Die Bewertung benutzt eigene, neuere Versionen statt deiner `requirements.txt`. |
+| pylint meckert auf GitHub mehr als bei mir. | Für pytest und pylint benutzt die Bewertung eigene, neuere Versionen; die Zeilen dazu in deiner `requirements.txt` werden übersprungen. |
+| `ModuleNotFoundError` für ein Paket, das lokal da ist. | Das Paket fehlt in `requirements.txt` — oder die Installation im Lauf ist gescheitert. Im **Actions**-Log steht dann `requirements.txt: install failed`. |
 | Ich habe nach dem Abgabetermin gepusht. | Die Abgabe wird trotzdem bewertet und als verspätet markiert. |
 | Meine Note fehlt in Moodle. | Meist fehlt der GitHub-Name im Moodle-Profilfeld. Sonst der Lehrperson melden. |

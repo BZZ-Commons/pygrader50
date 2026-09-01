@@ -11,7 +11,8 @@ Symptom → Ursache. Ausführliche Erklärungen stehen auf den verlinkten Seiten
 | Unerwarteter Konflikt beim Pushen | Die Lehrperson hat den Abgabemodus umgestellt und dabei einen Commit ins Repo geschrieben. Einmal `git pull`. |
 | Release zeigt `0/0` | Für diese Aufgabe ist keine Bewertung hinterlegt. Kein Fehler auf deiner Seite — der Lehrperson melden. |
 | Rotes Kreuz, aber alle Tests grün | Das Linting gab 0 Punkte. Zeile `Linting` im Release ansehen. |
-| pylint meckert auf GitHub mehr als lokal | Die Bewertung benutzt eigene, festgelegte Versionen statt deiner `requirements.txt`. |
+| pylint meckert auf GitHub mehr als lokal | Für pytest und pylint benutzt die Bewertung eigene, festgelegte Versionen; die Zeilen dazu in `requirements.txt` werden übersprungen. |
+| `ModuleNotFoundError` für ein Paket, das lokal vorhanden ist | Das Paket fehlt in `requirements.txt`, oder die Installation im Lauf ist gescheitert — im Log steht `requirements.txt: install failed` mit der pip-Ausgabe darunter. |
 | Ein Test bricht mit Timeout ab | Endlosschleife oder wartende Eingabe (`input()`) im Code. Jeder Testfall hat ein eigenes Zeitlimit. |
 | Note fehlt in Moodle | Übertrag läuft zeitgesteuert. Fehlt sie am Folgetag: meist steht der GitHub-Name nicht im Moodle-Profilfeld. |
 

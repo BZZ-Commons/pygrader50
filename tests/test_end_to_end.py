@@ -171,3 +171,22 @@ def test_missing_environment_is_an_infrastructure_failure(tmp_path):
     assert completed.returncode == 1
     assert payload is None
     assert 'CLASSROOM' in completed.stderr
+
+
+def test_a_requirements_file_of_grading_pins_changes_nothing(tmp_path):
+    """The 63 templates ship exactly these two lines; both must be ignored.
+
+    No pip call happens for this input, so the test needs no package index —
+    which is also the point: a normal assignment installs nothing extra.
+    """
+    workspace = build_repo(tmp_path / 'pins', SOLUTION)
+    (workspace / 'requirements.txt').write_text(
+        'pylint==4.0.7\npytest==9.1.1\n', encoding='UTF-8'
+    )
+
+    completed, payload = grade(workspace)
+
+    assert completed.returncode == 0, completed.stderr
+    assert payload['max-score'] == 7
+    assert 'pins its own version of pylint==4.0.7, pytest==9.1.1' in completed.stdout
+    assert '::warning::' not in completed.stdout

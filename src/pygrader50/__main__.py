@@ -18,7 +18,7 @@ import sys
 import traceback
 
 from . import config as config_module
-from . import pylint_runner, pytest_runner, render, result
+from . import pylint_runner, pytest_runner, render, requirements, result
 from .console import bcolors, error as console_error, info, section, warn
 from .env import Identity, MissingEnvironment
 
@@ -38,6 +38,10 @@ def grade(identity: Identity) -> int:
 
     for filename, source in sorted(grading.sources.items()):
         info(f'config: {filename} ← {source}')
+
+    # Before either runner: an assignment may need packages neither pytest nor
+    # pylint brings along (httpx, flask). Never fatal — see requirements.py.
+    requirements.install(identity.workspace)
 
     sections = []
     if grading.has_unittests:
