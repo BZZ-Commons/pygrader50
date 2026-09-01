@@ -69,7 +69,7 @@ die Datei auf die Pages-Site, wo `runner.py` sie bei jeder Abgabe holt.
 Die gepinnte Version steht in `bootstrap/autograder.py`:
 
 ```python
-VERSION = 'v2.1.2'
+VERSION = 'v2.4.0'
 ```
 
 Ein Upgrade heisst später: Tag hochziehen, Zeile ändern, `set-default` erneut

@@ -45,7 +45,8 @@ Im Einzelnen:
    Klassen-Default `<CLASSROOM>/autograder.py` → sonst eine leere `0/0`-Abgabe.
 5. Der Klassen-Default ist [`bootstrap/autograder.py`](../bootstrap/autograder.py)
    aus diesem Repo. Er installiert pygrader50 in gepinnter Version und startet
-   `python -m pygrader50` im Studi-Checkout.
+   `python -m pygrader50` im Studi-Checkout. pygrader50 installiert daraufhin die
+   Zusatzpakete aus `requirements.txt` — gefiltert, siehe unten — und bewertet.
 6. `runner.py` liest danach `result.json`, überschreibt `owner`,
    `assignment_type`, `datetime`, `graded_at` und `submitted_by`, validiert das
    Payload und publiziert Release und Commit-Status.

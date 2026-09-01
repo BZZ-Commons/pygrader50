@@ -41,7 +41,7 @@ Die Beispiele verwenden durchgehend diese Platzhalter:
 | `<TEMPLATE-ORG>` | Organisation mit den Template-Repos | `templates-python` |
 | `<SLUG>` | Slug einer Aufgabe | `lu04-a4-objektkommunikation` |
 | `<LOGIN>` | GitHub-Login einer lernenden Person | `anna` |
-| `<TAG>` | gepinnte pygrader50-Version | `v2.1.2` |
+| `<TAG>` | gepinnte pygrader50-Version | `v2.4.0` |
 
 `<ORG>` und `<CLASSROOM>` sind oft gleich, müssen es aber nicht sein — der
 Kurzname steht in `<CLASSROOM>/classroom.json`.

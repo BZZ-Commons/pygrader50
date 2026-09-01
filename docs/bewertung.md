@@ -72,6 +72,27 @@ lassen eine einzige Meldung stark durchschlagen. Wer den Faktor erhöht, macht
 die Note auf Startcode-Grossen praktisch binär — perfekt oder null. Das ist eine
 zulässige Entscheidung, aber eine bewusste.
 
+## Zusatzpakete aus `requirements.txt`
+
+Braucht eine Aufgabe ein Paket, das weder pytest noch pylint mitbringt — `httpx`,
+`flask` —, gehört es in die `requirements.txt` des Templates. Der Bewertungslauf
+installiert daraus alles **ausser** den Paketen der Engine (`pytest`,
+`pytest-timeout`, `pylint`, `pygrader50`); für die gilt die gepinnte Version aus
+[`pyproject.toml`](../pyproject.toml), sonst entschiede eine Datei im Studi-Repo
+über die Lint-Punkte. Übersprungene Zeilen stehen als Info im Log, nicht als
+Warnung — jedes Template pinnt pytest und pylint.
+
+Verworfen werden ausserdem pip-Optionen (`-r`, `-e`, `--index-url`) und
+fortgesetzte Zeilen; die stehen als Warnung im Log. Ein `-r` zöge eine zweite
+Datei herein, die der Filter nie sieht.
+
+Scheitert die Installation — Tippfehler im Pin, Index nicht erreichbar, ein
+Paket, das eine ältere pytest-Version verlangt —, warnt der Lauf und bewertet
+weiter. Die Tests scheitern dann mit einem lesbaren `ModuleNotFoundError`, statt
+dass die Abgabe ganz ohne Rückmeldung als `error` endet.
+
+Seit `v2.4.0`; davor wurde die Datei im Lauf gar nicht benutzt.
+
 ## Wie Punkte entstehen
 
 ### Unittests
@@ -186,6 +207,19 @@ Log nicht sprengt.
 
 *Output of your program* ist alles, was die Lösung selbst mit `print()`
 ausgegeben hat, gekappt bei 500 Zeichen. Bis `v2.2.0` wurde beides verworfen.
+
+Ganz oben im Log steht ausserdem, was aus `requirements.txt` übersprungen und
+was installiert wurde:
+
+```
+requirements.txt: the grading engine pins its own version of pylint==4.0.7, pytest==9.1.1
+
+################################################################################
+Installing from requirements.txt
+################################################################################
+  httpx==0.28.1
+  pytest-asyncio==1.4.0
+```
 
 ## Ein Bundle anlegen
 

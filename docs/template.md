@@ -20,7 +20,7 @@ Platzhalter siehe [Übersicht](README.md#platzhalter).
 | `.github/autograding/unittests.json` | Pflicht | Testfälle mit Punkten und Timeout |
 | `.github/autograding/lint.json` | Pflicht | zu lintende Dateien und Lint-Punkte |
 | `.github/autograding/pylintrc` | Pflicht | pylint-Konfiguration |
-| `requirements.txt` | empfohlen | Pins für die **lokale** Arbeit |
+| `requirements.txt` | empfohlen | Pins für die lokale Arbeit; Zusatzpakete daraus installiert auch der Bewertungslauf |
 | `.python-version` | empfohlen | muss zu `runtime.python` in `assignments.json` passen |
 | `README.md` | empfohlen | Aufgabenstellung oder Link darauf |
 | `.gitignore` | empfohlen | `.venv/`, `__pycache__/`, IDE-Ordner |
