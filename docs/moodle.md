@@ -255,6 +255,23 @@ Alle Optionen: [CLI-Referenz](cli.md#python--m-pygrader50moodle-übertragen).
 | `Scope fehlt`, Exit 2, nichts gesendet | Classroom-Feld leer gelassen — für alle Klassen `all_classrooms` setzen |
 | `unbekanntes Classroom`, Exit 2 | Tippfehler im Classroom-Namen; die Meldung listet die vorhandenen auf |
 | Nachtlauf jede Nacht rot, immer dieselbe Person | Karteileichen-Eintrag in `scores.json`, siehe [Betrieb](betrieb.md#scoresjson-wird-nie-aufgeräumt) |
+| `The assignment is overdue, points/feedback not updated` | Die Frist der **Moodle-Aktivität** ist durch; siehe unten |
+
+### Überfällige Aufgaben nehmen keine Noten mehr an
+
+Ist der Cutoff der Moodle-Aktivität überschritten, bricht das Plugin ab, *bevor*
+es die Note schreibt — es sei denn, für die Person existiert ein Override. Der
+Aufruf schreibt dann nichts und wird als fehlgeschlagen gemeldet.
+
+Das trifft besonders den [Nachzug](#nachzug): für überfällige Aufgaben bleibt in
+Moodle die gerundete Zahl stehen, und jeder weitere Nachzug versucht es erneut
+und scheitert erneut. Ungefährlich, aber der Lauf färbt sich rot. Wer die
+Altnoten wirklich korrigieren will, öffnet in Moodle das Cutoff-Datum oder setzt
+Overrides.
+
+Massgeblich ist allein der Cutoff der **Moodle-Aktivität**. Die Frist in
+`assignments.json` auf GitHub ist etwas anderes und taugt nicht als Vorschau —
+eine Aufgabe ohne `due` dort kann in Moodle längst geschlossen sein.
 
 Die Plugin-eigenen Fehler (`no_user`, `no_assignment`, `overdue`) kommen als
 **Warnungen im Ergebnis** zurück, nie als Exception. Eine Exception stammt
