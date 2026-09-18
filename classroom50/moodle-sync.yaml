@@ -150,7 +150,7 @@ jobs:
       # Bewertungspfad, weil sie ein `set-default` und damit einen Eingriff in
       # laufende Klassen kostet. moodle.py läuft im Bewertungsjob gar nicht.
       - name: Install pygrader50
-        run: pip install "pygrader50 @ git+https://github.com/BZZ-Commons/pygrader50@v2.5.1"
+        run: pip install "pygrader50 @ git+https://github.com/BZZ-Commons/pygrader50@v2.6.0"
 
       - name: Übertragen
         env:

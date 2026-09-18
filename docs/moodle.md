@@ -138,7 +138,13 @@ Rest bekommt bloss den Zustandsvermerk.
 Der Lauf ist damit wiederholbar und fortsetzbar: ein zweiter fasst nur noch an,
 was beim ersten nicht durchkam. Ein nicht abrufbarer Release-Text zählt als
 **fehlgeschlagen** und bleibt liegen — er darf nicht als erledigt gelten, sonst
-käme kein Nachzug je wieder auf ihn zurück.
+käme kein Nachzug je wieder auf ihn zurück. Dasselbe gilt für eine abgelaufene
+Frist, die aber als `abgelehnt` zählt und den Lauf nicht rot färbt.
+
+Geht GitHub unterwegs das Kontingent aus, **bricht der Lauf ab** statt den Rest
+im Leerlauf abzuarbeiten, und sagt, wie viele Abgaben er nicht geprüft hat. Die
+bleiben offen; der nächste Lauf holt sie nach und ist dank der bereits
+vermerkten `points` deutlich kürzer.
 
 > **Nicht umkehrbar.** Die Rundung fiel in beide Richtungen aus, der Nachzug
 > korrigiert deshalb auch **nach unten** — wer heute auf der vollen Punktzahl
@@ -255,19 +261,22 @@ Alle Optionen: [CLI-Referenz](cli.md#python--m-pygrader50moodle-übertragen).
 | `Scope fehlt`, Exit 2, nichts gesendet | Classroom-Feld leer gelassen — für alle Klassen `all_classrooms` setzen |
 | `unbekanntes Classroom`, Exit 2 | Tippfehler im Classroom-Namen; die Meldung listet die vorhandenen auf |
 | Nachtlauf jede Nacht rot, immer dieselbe Person | Karteileichen-Eintrag in `scores.json`, siehe [Betrieb](betrieb.md#scoresjson-wird-nie-aufgeräumt) |
-| `The assignment is overdue, points/feedback not updated` | Die Frist der **Moodle-Aktivität** ist durch; siehe unten |
+| `abgelehnt: N` im Log, `⏸`-Zeilen | Die Frist der **Moodle-Aktivität** ist durch — kein Fehler, siehe unten |
 
 ### Überfällige Aufgaben nehmen keine Noten mehr an
 
 Ist der Cutoff der Moodle-Aktivität überschritten, bricht das Plugin ab, *bevor*
 es die Note schreibt — es sei denn, für die Person existiert ein Override. Der
-Aufruf schreibt dann nichts und wird als fehlgeschlagen gemeldet.
+Aufruf schreibt dann nichts.
 
-Das trifft besonders den [Nachzug](#nachzug): für überfällige Aufgaben bleibt in
-Moodle die gerundete Zahl stehen, und jeder weitere Nachzug versucht es erneut
-und scheitert erneut. Ungefährlich, aber der Lauf färbt sich rot. Wer die
-Altnoten wirklich korrigieren will, öffnet in Moodle das Cutoff-Datum oder setzt
-Overrides.
+**Das ist kein Fehler**, sondern die Einstellung der Aktivität. Solche Abgaben
+zählen deshalb eigens als `abgelehnt` und färben den Lauf **nicht** rot; im Log
+stehen sie als `⏸`. Ein roter Lauf für etwas, das so gewollt ist, stumpft nur
+gegen die Fälle ab, die wirklich eine Reaktion brauchen.
+
+Der Eintrag bleibt dabei offen — er bekommt kein `points`. Wird das Cutoff-Datum
+in Moodle später geöffnet oder ein Override gesetzt, holt ihn ein
+[Nachzug](#nachzug) nach. Bis dahin bleibt dort die gerundete Zahl stehen.
 
 Massgeblich ist allein der Cutoff der **Moodle-Aktivität**. Die Frist in
 `assignments.json` auf GitHub ist etwas anderes und taugt nicht als Vorschau —

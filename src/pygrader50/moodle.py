@@ -85,6 +85,32 @@ EXACT_PATTERN = re.compile(
 # Actions-Job so lange leer laufen zu lassen ist teurer als ein zweiter Lauf.
 MAX_THROTTLE_WAIT = 120
 
+# Wortlaut aus `update_grade.php`: ist der Cutoff der Moodle-Aktivität durch und
+# hat die Person keinen Override, bricht das Plugin ab, *bevor* es die Note
+# schreibt. Das ist die Einstellung der Aktivität und kein Fehler — deshalb
+# zählt es hier eigens und färbt den Lauf nicht rot.
+OVERDUE_MARKER = 'assignment is overdue'
+
+
+@dataclass(frozen=True)
+class Counts:
+    """Wie ein Durchlauf ausgegangen ist.
+
+    `refused` steht neben `failed`, weil die beiden verschiedene Antworten
+    verlangen: ein Fehler will behoben werden, eine abgelaufene Frist ist so
+    gewollt und braucht höchstens eine Entscheidung in Moodle.
+    """
+
+    sent: int = 0
+    skipped: int = 0
+    refused: int = 0
+    failed: int = 0
+
+    def line(self) -> str:
+        """Die Zählerzeile fürs Log."""
+        return (f'übertragen: {self.sent} | unverändert: {self.skipped} | '
+                f'abgelehnt: {self.refused} | fehlgeschlagen: {self.failed}')
+
 
 @dataclass(frozen=True)
 class Submission:  # pylint: disable=too-many-instance-attributes
@@ -398,12 +424,31 @@ def endpoint_url(base_url: str, token: str, function: str) -> str:
     )
 
 
+def send_one(submission: Submission, body: str, grade: tuple, *,
+             sender, state: State) -> tuple[str, str]:
+    """Eine Abgabe senden und den Ausgang benennen: sent / refused / failed.
+
+    `refused` ist kein Fehler: die Moodle-Aktivität nimmt nach ihrer Frist
+    bewusst nichts mehr an. Der Eintrag bleibt dann ohne `points` und damit
+    offen — wird der Cutoff später geöffnet, holt ihn ein Nachzug nach.
+    """
+    points, maximum = grade
+    payload = build_payload(submission, body, points=points, max_points=maximum)
+    ok, message = sender(payload)
+    if ok:
+        # Ohne Release-Text ging die gerundete Zahl raus — dann bleibt der
+        # Eintrag ohne `points` und ein Nachzug holt ihn später ein.
+        state.record(submission, points if body else None)
+        return 'sent', message
+    return ('refused' if OVERDUE_MARKER in message else 'failed'), message
+
+
 def sync(  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
     submissions: list[Submission], *, sender, feedback_provider, state: State,
     dry_run: bool = False, force: bool = False, backfill: bool = False,
-) -> tuple[int, int, int]:
-    """Überträgt die Abgaben; gibt (übertragen, übersprungen, fehlgeschlagen) zurück."""
-    sent = skipped = failed = 0
+) -> Counts:
+    """Überträgt die Abgaben und zählt, wie es ausgegangen ist."""
+    sent = skipped = refused = failed = 0
     reasons: collections.Counter = collections.Counter()
     for index, submission in enumerate(submissions):
         label = f'{submission.assignment} / {submission.owner}'
@@ -466,20 +511,20 @@ def sync(  # pylint: disable=too-many-arguments,too-many-locals,too-many-branche
             sent += 1
             continue
 
-        payload = build_payload(submission, body, points=points, max_points=maximum)
-        ok, message = sender(payload)
-        if ok:
-            # Ohne Release-Text ging die gerundete Zahl raus — dann bleibt der
-            # Eintrag ohne `points` und ein Nachzug holt ihn später ein.
-            state.record(submission, points if body else None)
+        outcome, message = send_one(
+            submission, body, (points, maximum), sender=sender, state=state)
+        if outcome == 'sent':
             sent += 1
             console_ok(f'✅ {label}: {points}/{maximum}')
+        elif outcome == 'refused':
+            refused += 1
+            info(f'⏸ {label}: Frist abgelaufen, Moodle nimmt keine Note mehr an')
         else:
             failed += 1
             reasons[message.splitlines()[0] if message else 'ohne Meldung'] += 1
             fail(f'❌ {label}: {message}')
     _report_reasons(reasons)
-    return sent, skipped, failed
+    return Counts(sent=sent, skipped=skipped, refused=refused, failed=failed)
 
 
 def _report_reasons(reasons: collections.Counter) -> None:
@@ -638,14 +683,15 @@ def announce_scope(classrooms: list[Classroom], *, dry_run: bool) -> None:
     step_summary(f'### Moodle-Übertrag\n\n{line}\n')
 
 
-def summary_table(results: list[tuple[Classroom, tuple[int, int, int] | None]]) -> str:
+def summary_table(results: list[tuple[Classroom, Counts | None]]) -> str:
     """Die Zähler je Classroom als Markdown-Tabelle."""
     return '\n' + render.table([
         {
             'Classroom': room.name,
-            'übertragen': counts[0] if counts else '—',
-            'unverändert': counts[1] if counts else '—',
-            'fehlgeschlagen': counts[2] if counts else f'unlesbare {SCORES_FILENAME}',
+            'übertragen': counts.sent if counts else '—',
+            'unverändert': counts.skipped if counts else '—',
+            'abgelehnt': counts.refused if counts else '—',
+            'fehlgeschlagen': counts.failed if counts else f'unlesbare {SCORES_FILENAME}',
         }
         for room, counts in results
     ])
@@ -667,7 +713,7 @@ def moodle_endpoint() -> str:
 
 
 def sync_classroom(room: Classroom, *, options: Options, endpoint: str,
-                   gh_token: str | None) -> tuple[int, int, int] | None:
+                   gh_token: str | None) -> Counts | None:
     """Ein Classroom übertragen; `None`, wenn seine `scores.json` unbrauchbar ist.
 
     Ein gescheitertes Classroom darf die übrigen nicht verhindern — der
@@ -692,7 +738,7 @@ def sync_classroom(room: Classroom, *, options: Options, endpoint: str,
         )
         info(f'{len(submissions)} Abgaben')
         state = State.load(room.state)
-        sent, skipped, failed = sync(
+        counts = sync(
             submissions,
             sender=lambda payload: post(endpoint, payload),
             feedback_provider=(
@@ -709,8 +755,8 @@ def sync_classroom(room: Classroom, *, options: Options, endpoint: str,
     except Exception as exc:  # pylint: disable=broad-exception-caught
         console_error(f'{room.scores}: {type(exc).__name__}: {exc}')
         return None
-    info(f'übertragen: {sent} | unverändert: {skipped} | fehlgeschlagen: {failed}')
-    return sent, skipped, failed
+    info(counts.line())
+    return counts
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -771,7 +817,10 @@ def main(argv: list[str] | None = None) -> int:
         for room in classrooms
     ]
     step_summary(summary_table(results))
-    return 1 if any(counts is None or counts[2] for _, counts in results) else 0
+    # Eine abgelaufene Frist zählt hier bewusst nicht: Moodle lehnt die Note
+    # dann so ab, wie die Aktivität eingestellt ist. Ein roter Lauf dafür würde
+    # nur abstumpfen gegen die Fälle, die wirklich etwas brauchen.
+    return 1 if any(counts is None or counts.failed for _, counts in results) else 0
 
 
 if __name__ == '__main__':

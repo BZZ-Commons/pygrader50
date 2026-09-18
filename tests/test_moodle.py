@@ -120,12 +120,12 @@ def test_sync_sends_only_what_changed():
     state.record(found)
     calls = []
 
-    sent, skipped, failed = moodle.sync(
+    counts = moodle.sync(
         [found], sender=lambda payload: calls.append(payload) or (True, 'ok'),
         feedback_provider=lambda _: '', state=state,
     )
 
-    assert (sent, skipped, failed) == (0, 1, 0)
+    assert (counts.sent, counts.skipped, counts.failed) == (0, 1, 0)
     assert calls == []
 
 
@@ -134,24 +134,24 @@ def test_sync_force_resends():
     state = moodle.State()
     state.record(found)
 
-    sent, skipped, failed = moodle.sync(
+    counts = moodle.sync(
         [found], sender=lambda payload: (True, 'ok'),
         feedback_provider=lambda _: '', state=state, force=True,
     )
 
-    assert (sent, skipped, failed) == (1, 0, 0)
+    assert (counts.sent, counts.skipped, counts.failed) == (1, 0, 0)
 
 
 def test_sync_reports_failures_without_recording_them():
     found = moodle.latest_submissions(scores(submission()))[0]
     state = moodle.State()
 
-    sent, skipped, failed = moodle.sync(
+    counts = moodle.sync(
         [found], sender=lambda payload: (False, 'No matching assignment found'),
         feedback_provider=lambda _: '', state=state,
     )
 
-    assert (sent, skipped, failed) == (0, 0, 1)
+    assert (counts.sent, counts.skipped, counts.failed) == (0, 0, 1)
     assert state.entries == {}
 
 
@@ -159,12 +159,12 @@ def test_dry_run_sends_nothing():
     found = moodle.latest_submissions(scores(submission()))[0]
     calls = []
 
-    sent, _, _ = moodle.sync(
+    counts = moodle.sync(
         [found], sender=lambda payload: calls.append(payload) or (True, 'ok'),
         feedback_provider=lambda _: '', state=moodle.State(), dry_run=True,
     )
 
-    assert sent == 1 and calls == []
+    assert counts.sent == 1 and calls == []
 
 
 # Wörtlich aus dem Release submit/2026-09-16T09-24-51Z-80d9e0c im Repo
@@ -282,12 +282,12 @@ def test_an_old_entry_is_not_resent_by_a_normal_run():
     state = moodle.State(entries={found.key: {'submission': found.submission, 'score': 5}})
     calls = []
 
-    sent, skipped, failed = moodle.sync(
+    counts = moodle.sync(
         [found], sender=lambda payload: calls.append(payload) or (True, 'ok'),
         feedback_provider=lambda _: LIVE_BODY, state=state,
     )
 
-    assert (sent, skipped, failed) == (0, 1, 0)
+    assert (counts.sent, counts.skipped, counts.failed) == (0, 1, 0)
     assert calls == []
 
 
@@ -296,12 +296,12 @@ def test_backfill_sends_an_old_entry_whose_exact_value_differs():
     state = moodle.State(entries={found.key: {'submission': found.submission, 'score': 5}})
     calls = []
 
-    sent, _, _ = moodle.sync(
+    counts = moodle.sync(
         [found], sender=lambda payload: calls.append(payload) or (True, 'ok'),
         feedback_provider=lambda _: LIVE_BODY, state=state, backfill=True,
     )
 
-    assert sent == 1
+    assert counts.sent == 1
     assert calls[0]['points'] == 6.44
     assert state.entries[found.key]['points'] == 6.44
 
@@ -312,13 +312,13 @@ def test_backfill_only_notes_an_old_entry_that_does_not_change():
     state = moodle.State(entries={found.key: {'submission': found.submission, 'score': 5}})
     calls = []
 
-    sent, skipped, _ = moodle.sync(
+    counts = moodle.sync(
         [found], sender=lambda payload: calls.append(payload) or (True, 'ok'),
         feedback_provider=lambda _: '### classroom50 autograde: 5/7\n', state=state,
         backfill=True,
     )
 
-    assert (sent, skipped) == (0, 1)
+    assert (counts.sent, counts.skipped) == (0, 1)
     assert calls == []
     assert state.entries[found.key]['points'] == 5
 
@@ -329,12 +329,12 @@ def test_backfill_leaves_an_entry_whose_release_text_is_unreachable():
     entry = {'submission': found.submission, 'score': 5}
     state = moodle.State(entries={found.key: entry})
 
-    sent, skipped, failed = moodle.sync(
+    counts = moodle.sync(
         [found], sender=lambda payload: (True, 'ok'),
         feedback_provider=lambda _: '', state=state, backfill=True,
     )
 
-    assert (sent, skipped, failed) == (0, 0, 1)
+    assert (counts.sent, counts.skipped, counts.failed) == (0, 0, 1)
     assert 'points' not in state.entries[found.key]
 
 
@@ -350,9 +350,9 @@ def test_a_second_backfill_touches_nothing():
         )
 
     run()
-    sent, skipped, failed = run()
+    counts = run()
 
-    assert (sent, skipped, failed) == (0, 1, 0)
+    assert (counts.sent, counts.skipped, counts.failed) == (0, 1, 0)
     assert len(calls) == 1
 
 
@@ -410,13 +410,45 @@ def test_a_spent_quota_stops_the_run_instead_of_burning_the_rest():
     def provider(_):
         raise moodle.RateLimited('GitHub drosselt und gibt erst in 900s wieder frei')
 
-    sent, skipped, failed = moodle.sync(
+    counts = moodle.sync(
         found, sender=lambda payload: (True, 'ok'),
         feedback_provider=provider, state=state,
     )
 
-    assert (sent, skipped, failed) == (0, 0, 5), 'alle als offen gemeldet, keiner angefasst'
+    assert (counts.sent, counts.skipped, counts.failed) == (0, 0, 5), \
+        'alle als offen gemeldet, keiner angefasst'
     assert state.entries == {}
+
+
+OVERDUE_ANSWER = (
+    'No override found.\n  * assignmentname "slug"\n'
+    'The assignment is overdue, points/feedback not updated'
+)
+
+
+def test_an_expired_deadline_is_not_a_failure():
+    """So ist die Aktivität eingestellt — ein roter Lauf dafür stumpft nur ab."""
+    found = moodle.latest_submissions(scores(submission()))[0]
+    state = moodle.State()
+
+    counts = moodle.sync(
+        [found], sender=lambda payload: (False, OVERDUE_ANSWER),
+        feedback_provider=lambda _: LIVE_BODY, state=state,
+    )
+
+    assert (counts.sent, counts.refused, counts.failed) == (0, 1, 0)
+    assert state.entries == {}, 'bleibt offen — wird der Cutoff geöffnet, greift ein Nachzug'
+
+
+def test_other_moodle_errors_stay_failures():
+    found = moodle.latest_submissions(scores(submission()))[0]
+
+    counts = moodle.sync(
+        [found], sender=lambda payload: (False, 'No matching assignment found.'),
+        feedback_provider=lambda _: LIVE_BODY, state=moodle.State(),
+    )
+
+    assert (counts.refused, counts.failed) == (0, 1)
 
 
 def test_backfill_refuses_to_run_without_the_release_text():
@@ -696,6 +728,23 @@ def test_cli_all_classrooms_covers_every_room(tmp_path, moodle_stub, capsys):
     assert (repo / 'm450-ix25' / 'moodle-state.json').is_file()
     assert len(moodle_stub) == 2
     assert 'Scope: 2 Classroom(s)' in capsys.readouterr().out
+
+
+def test_cli_stays_green_when_moodle_only_refuses_expired_deadlines(
+    tmp_path, monkeypatch, capsys,
+):
+    """Exit 0: die Aktivität ist so eingestellt, da ist nichts zu beheben."""
+    monkeypatch.setenv('MOODLE_URL', 'https://moodle.example.org')
+    monkeypatch.setenv('MOODLE_TOKEN', 'abc123')
+    monkeypatch.setattr(moodle, 'release_feedback', lambda submission, token: LIVE_BODY)
+    monkeypatch.setattr(
+        moodle, 'post',
+        lambda endpoint, payload, timeout=30: (False, OVERDUE_ANSWER),
+    )
+    repo = config_repo(tmp_path, 'm323-ix24')
+
+    assert moodle.main(['--config-repo', str(repo), '--classroom', 'm323-ix24']) == 0
+    assert 'abgelehnt: 1' in capsys.readouterr().out
 
 
 def test_cli_one_broken_classroom_does_not_stop_the_others(tmp_path, moodle_stub):
