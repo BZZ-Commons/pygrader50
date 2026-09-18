@@ -47,6 +47,10 @@ def release_body(identity: Identity, sections: list[dict], payload: dict) -> str
     ]
     exact = sum(section_result['points'] for section_result in sections)
     exact_max = sum(section_result['max'] for section_result in sections)
+    # Diese Zeile ist nicht nur für Menschen da: `moodle.exact_points` liest sie
+    # zurück, weil `result.json` nur ganze Zahlen führen darf, Moodle aber den
+    # exakten Wert nimmt. Der Wortlaut ist damit eine Schnittstelle — ein
+    # Round-Trip-Test in `tests/test_moodle.py` hält ihn fest.
     if round(exact) != exact or round(exact_max) != exact_max:
         parts.append(
             f'_Exakt: {exact:.2f}/{exact_max:.2f} Punkte — '

@@ -93,9 +93,63 @@ Je Kombination aus Aufgabe und Person geht die **neueste** Abgabe raus.
 |---|---|
 | `assignment_name` | Slug der Aufgabe aus `scores.json` |
 | `user_name` | GitHub-Login der besitzenden Person |
-| `points` / `max` | Punkte der neuesten Abgabe |
+| `points` / `max` | Punkte der neuesten Abgabe, **exakt** — siehe unten |
 | `externallink` | URL des GitHub-Releases |
 | `feedback` | Release-Text; davor ein Hinweis bei verspäteter Abgabe, dahinter der Link zur Abgabe |
+
+### Exakte Punkte
+
+Moodle bekommt den **exakten** Punktestand auf zwei Nachkommastellen, nicht die
+ganze Zahl aus `scores.json`. Der Lint-Anteil bringt Nachkommastellen mit (siehe
+[Bewertung](bewertung.md#rundung)), und das Plugin nimmt sie: `points` und `max`
+sind dort `PARAM_FLOAT`.
+
+Die Quelle ist der Release-Text, den der Übertrag für das Feedback ohnehin holt.
+Steht dort
+
+```
+_Exakt: 6.44/7.00 Punkte — im Gradebook auf ganze Punkte gerundet._
+```
+
+gehen 6.44 nach Moodle statt 6. Fehlt die Zeile, wurde gar nicht gerundet und
+die ganze Zahl ist bereits exakt. Ist der Release-Text nicht abrufbar oder läuft
+der Übertrag mit `--no-feedback`, geht die ganze Zahl raus — die Note ist dann
+gröber, aber nie falsch.
+
+Im Gradebook, im Commit-Status und in `scores.json` steht weiterhin die ganze
+Zahl. Das ist keine Nachlässigkeit: `result.json` lässt dort nur `int` zu.
+
+### Nachzug
+
+Bis `v2.4.0` ging die gerundete Zahl nach Moodle. Ein einmaliger Lauf zieht die
+bereits übertragenen Abgaben nach:
+
+```bash
+python -m pygrader50.moodle --classroom <CLASSROOM> --backfill --dry-run
+python -m pygrader50.moodle --classroom <CLASSROOM> --backfill
+```
+
+Angefasst werden nur Einträge, die im Zustandsfile kein `points` tragen. Der
+Schlüssel bedeutet »dieser exakte Wert ist nach Moodle gegangen«; er fehlt bei
+allem aus der Zeit vor `v2.5.0` und bei jeder Abgabe, deren Release-Text sich
+nicht abrufen liess. Gesendet wird von ihnen nur, was sich wirklich ändert; der
+Rest bekommt bloss den Zustandsvermerk.
+
+Der Lauf ist damit wiederholbar und fortsetzbar: ein zweiter fasst nur noch an,
+was beim ersten nicht durchkam. Ein nicht abrufbarer Release-Text zählt als
+**fehlgeschlagen** und bleibt liegen — er darf nicht als erledigt gelten, sonst
+käme kein Nachzug je wieder auf ihn zurück.
+
+> **Nicht umkehrbar.** Die Rundung fiel in beide Richtungen aus, der Nachzug
+> korrigiert deshalb auch **nach unten** — wer heute auf der vollen Punktzahl
+> steht, kann danach darunter liegen. Eine in Moodle von Hand korrigierte Note
+> eines betroffenen Eintrags wird überschrieben, und kein zweiter Lauf nimmt das
+> zurück. Den Nachzug zwischen zwei Aufgaben fahren, nicht in einer laufenden
+> Abgabefrist, vorher `moodle-state.json` sichern und die Klasse informieren.
+
+Ohne `--backfill` ändert sich am Nachtlauf nichts: alte Einträge haben
+unveränderten Tag und unveränderte ganze Zahl und werden übersprungen wie
+bisher.
 
 ## Zeitplan
 

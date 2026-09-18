@@ -35,6 +35,14 @@ Umgebung:
 Je (Assignment, Owner) wird die neueste Abgabe übertragen. Ein Zustandsfile
 merkt sich, was bereits übermittelt wurde, damit ein zweiter Lauf nur noch
 Änderungen schickt; `--force` ignoriert es.
+
+Übertragen wird der **exakte** Punktestand, nicht die ganze Zahl aus
+`scores.json`. Die kommt aus `result.json`, und dort verlangt Classroom 50
+`int` — der Lint-Anteil bringt aber Nachkommastellen mit, und Moodle nimmt sie
+(`points` und `max` sind im Plugin `PARAM_FLOAT`). Der exakte Wert steht in der
+`_Exakt:`-Zeile des Release-Texts, den dieses Modul für das Feedback ohnehin
+holt; `exact_points` liest ihn dort heraus. Fehlt die Zeile, ist die ganze Zahl
+bereits exakt.
 """
 
 from __future__ import annotations
@@ -43,6 +51,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -61,6 +70,13 @@ SCORES_SCHEMA = 'classroom50/scores/v1'
 # Dateinamen, die `collect-scores` im Config-Repo je Classroom-Ordner anlegt.
 SCORES_FILENAME = 'scores.json'
 STATE_FILENAME = 'moodle-state.json'
+
+# Die Zeile, die `render.release_body` schreibt, sobald der Punktestand
+# bruchwertig ist. Der Wortlaut ist damit eine Schnittstelle und kein blosser
+# Prosatext; `test_moodle.py` hält ihn über einen Round-Trip gegen `render` fest.
+EXACT_PATTERN = re.compile(
+    r'_Exakt:\s*(?P<points>\d+(?:\.\d+)?)\s*/\s*(?P<max>\d+(?:\.\d+)?)\s*Punkte'
+)
 
 
 @dataclass(frozen=True)
@@ -107,7 +123,13 @@ class State:
         return cls(path=path, entries=data.get('entries') or {})
 
     def is_current(self, submission: Submission) -> bool:
-        """True, wenn genau diese Abgabe mit dieser Punktzahl schon übertragen wurde."""
+        """True, wenn genau diese Abgabe mit dieser Punktzahl schon übertragen wurde.
+
+        Verglichen wird bewusst die **ganze** Zahl aus `scores.json`, nicht der
+        exakte Wert: `scores.json` kennt den exakten gar nicht, und ein
+        Vergleich »gespeichert 6.44 == score 6« schlüge jede Nacht fehl und
+        sendete dieselbe Note endlos neu.
+        """
         previous = self.entries.get(submission.key)
         return bool(
             previous
@@ -115,13 +137,35 @@ class State:
             and previous.get('score') == submission.score
         )
 
-    def record(self, submission: Submission) -> None:
-        """Erfolgreiche Übertragung vermerken."""
-        self.entries[submission.key] = {
+    def has_exact(self, submission: Submission) -> bool:
+        """True, wenn der Eintrag von einer Version stammt, die exakt überträgt."""
+        return 'points' in (self.entries.get(submission.key) or {})
+
+    def sent_points(self, submission: Submission):
+        """Der Wert, der zuletzt wirklich nach Moodle ging.
+
+        Vor dieser Version war das die ganze Zahl, und genau die steht in einem
+        Alteintrag unter `score`.
+        """
+        previous = self.entries.get(submission.key) or {}
+        return previous.get('points', previous.get('score'))
+
+    def record(self, submission: Submission, points=None) -> None:
+        """Erfolgreiche Übertragung vermerken.
+
+        `points=None` heisst »es ging die gerundete Zahl raus, der exakte Wert
+        war nicht zu ermitteln«. Der Eintrag bleibt dann ohne `points`, und ein
+        späterer `--backfill` kommt auf ihn zurück — genau wie auf einen
+        Eintrag aus der Zeit vor dem exakten Übertrag.
+        """
+        entry = {
             'submission': submission.submission,
             'score': submission.score,
             'max-score': submission.max_score,
         }
+        if points is not None:
+            entry['points'] = points
+        self.entries[submission.key] = entry
 
     def save(self) -> None:
         """Zustand zurückschreiben (No-op ohne Pfad)."""
@@ -186,13 +230,48 @@ def release_feedback(submission: Submission, token: str | None) -> str:
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.load(response).get('body') or ''
-    except (urllib.error.HTTPError, urllib.error.URLError, ValueError) as exc:
+    # `OSError` statt der drei einzelnen Typen: `URLError` und `HTTPError` sind
+    # selbst OSError-Kinder, `TimeoutError` und `RemoteDisconnected` aber nicht
+    # — und über die tausenden Abrufe eines Nachzugs ist ein Aussetzer sicher.
+    # Der Feedback-Text ist Beiwerk; er darf nie einen Lauf abreissen.
+    except (OSError, ValueError) as exc:
         warn(f'{submission.key}: Feedback-Text nicht abrufbar ({exc})')
         return ''
 
 
-def build_payload(submission: Submission, feedback: str) -> dict:
-    """Formularfelder für mod_externalassignment_update_grade."""
+def _plain(value: float):
+    """Auf zwei Stellen runden, ganze Werte als `int`.
+
+    Ohne das stünde in Moodle und im Log `9.0`, wo heute `9` steht — ein
+    Unterschied ohne Unterschied, der jede Gegenprobe gegen den Vorstand
+    verrauschen würde.
+    """
+    rounded = round(value, 2)
+    return int(rounded) if rounded == int(rounded) else rounded
+
+
+def exact_points(body: str) -> tuple | None:
+    """Den exakten Punktestand aus dem Release-Text lesen; `None`, wenn keiner drinsteht.
+
+    Kein Treffer heisst nicht »unbekannt«, sondern »die ganze Zahl ist bereits
+    exakt«: `render.release_body` schreibt die Zeile nur, wenn gerundet wurde.
+    """
+    match = EXACT_PATTERN.search(body or '')
+    if match is None:
+        return None
+    try:
+        return _plain(float(match.group('points'))), _plain(float(match.group('max')))
+    except ValueError:  # pragma: no cover - die Regex lässt nur Zahlen durch
+        return None
+
+
+def build_payload(submission: Submission, feedback: str, *,
+                  points=None, max_points=None) -> dict:
+    """Formularfelder für mod_externalassignment_update_grade.
+
+    `points`/`max_points` tragen den exakten Stand aus dem Release-Text. Ohne
+    sie gehen die ganzen Zahlen der Abgabe raus.
+    """
     body = feedback
     if submission.late:
         body = '> ⏰ Abgabe nach dem Fälligkeitstermin.\n\n' + body
@@ -201,8 +280,8 @@ def build_payload(submission: Submission, feedback: str) -> dict:
     return {
         'assignment_name': submission.assignment,
         'user_name': submission.owner,
-        'points': submission.score,
-        'max': submission.max_score,
+        'points': submission.score if points is None else points,
+        'max': submission.max_score if max_points is None else max_points,
         'externallink': submission.release_url,
         # Wie in pygrader: der Text wird quotiert übertragen.
         'feedback': urllib.parse.quote(body),
@@ -269,15 +348,20 @@ def endpoint_url(base_url: str, token: str, function: str) -> str:
     )
 
 
-def sync(  # pylint: disable=too-many-arguments
+def sync(  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
     submissions: list[Submission], *, sender, feedback_provider, state: State,
-    dry_run: bool = False, force: bool = False,
+    dry_run: bool = False, force: bool = False, backfill: bool = False,
 ) -> tuple[int, int, int]:
     """Überträgt die Abgaben; gibt (übertragen, übersprungen, fehlgeschlagen) zurück."""
     sent = skipped = failed = 0
     for submission in submissions:
         label = f'{submission.assignment} / {submission.owner}'
-        if not force and state.is_current(submission):
+        current = state.is_current(submission)
+        # Nachzug: Einträge aus der Zeit vor dem exakten Übertrag tragen im
+        # Zustand kein `points`. Nur die werden noch einmal angefasst — und auch
+        # sie nur, wenn sich der Wert wirklich ändert (siehe unten).
+        catching_up = backfill and current and not state.has_exact(submission)
+        if current and not force and not catching_up:
             skipped += 1
             continue
         if not submission.owner:
@@ -285,17 +369,44 @@ def sync(  # pylint: disable=too-many-arguments
             failed += 1
             continue
 
+        # Auch im Trockenlauf: sonst nähme er einen anderen Weg als der echte
+        # und zeigte weiter die gerundete Zahl — er bewiese gerade das nicht,
+        # wofür er gefahren wird.
+        body = feedback_provider(submission)
+
+        # Beim Nachzug heisst ein leerer Release-Text nicht »nichts zu runden«,
+        # sondern »nicht abrufbar«. Ihn wie einen gelesenen zu behandeln,
+        # vermerkte den Eintrag mit der gerundeten Zahl als erledigt — und kein
+        # späterer Nachzug käme je wieder auf ihn zurück.
+        if catching_up and not body:
+            warn(f'{label}: Release-Text nicht abrufbar, bleibt für den nächsten Nachzug liegen')
+            failed += 1
+            continue
+
+        points, maximum = exact_points(body) or (submission.score, submission.max_score)
+
+        # Ein erneuter Versand desselben Werts überschriebe in Moodle eine
+        # Handkorrektur, ohne dass die Note davon anders würde. Beim Nachzug
+        # wird deshalb nur vermerkt, was sich nicht ändert.
+        if catching_up and points == state.sent_points(submission):
+            if not dry_run:
+                state.record(submission, points)
+            skipped += 1
+            continue
+
         if dry_run:
-            info(f'[dry-run] {label}: {submission.score}/{submission.max_score}')
+            info(f'[dry-run] {label}: {points}/{maximum}')
             sent += 1
             continue
 
-        payload = build_payload(submission, feedback_provider(submission))
+        payload = build_payload(submission, body, points=points, max_points=maximum)
         ok, message = sender(payload)
         if ok:
-            state.record(submission)
+            # Ohne Release-Text ging die gerundete Zahl raus — dann bleibt der
+            # Eintrag ohne `points` und ein Nachzug holt ihn später ein.
+            state.record(submission, points if body else None)
             sent += 1
-            console_ok(f'✅ {label}: {submission.score}/{submission.max_score}')
+            console_ok(f'✅ {label}: {points}/{maximum}')
         else:
             failed += 1
             fail(f'❌ {label}: {message}')
@@ -333,16 +444,18 @@ class Options:
     no_feedback: bool = False
     dry_run: bool = False
     force: bool = False
+    backfill: bool = False
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> 'Options':
-        """Die fünf Felder aus den geparsten Argumenten ziehen."""
+        """Die Felder aus den geparsten Argumenten ziehen."""
         return cls(
             assignment=args.assignment,
             user=args.user,
             no_feedback=args.no_feedback,
             dry_run=args.dry_run,
             force=args.force,
+            backfill=args.backfill,
         )
 
 
@@ -506,6 +619,7 @@ def sync_classroom(room: Classroom, *, options: Options, endpoint: str,
             state=state,
             dry_run=options.dry_run,
             force=options.force,
+            backfill=options.backfill,
         )
         if not options.dry_run:
             state.save()
@@ -534,11 +648,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument('--user', help='nur diesen GitHub-Login übertragen')
     parser.add_argument('--force', action='store_true',
                         help='auch unverändertes erneut übertragen')
+    parser.add_argument('--backfill', action='store_true',
+                        help='Abgaben, die vor dem exakten Übertrag übermittelt '
+                             'wurden, auf den exakten Wert nachziehen')
     parser.add_argument('--dry-run', action='store_true',
                         help='nur anzeigen, nichts senden')
     parser.add_argument('--no-feedback', action='store_true',
                         help='ohne Feedback-Text aus dem Release')
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    # Der Nachzug lebt vom Release-Text. Ohne ihn vermerkte er jede Abgabe mit
+    # der gerundeten Zahl als erledigt — und ein späterer, richtiger Nachzug
+    # überspränge sie dann alle. Exit 2 wie bei jedem anderen Fehlaufruf.
+    if args.backfill and args.no_feedback:
+        parser.error('--backfill braucht den Release-Text und schliesst --no-feedback aus')
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:

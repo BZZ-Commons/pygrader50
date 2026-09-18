@@ -117,8 +117,20 @@ auf 0 geklemmt. `Linting: 0` ist in dem Fall korrekt, kein Defekt.
 
 ### Rundung
 
-`result.json` verlangt ganze Zahlen, es wird gerundet. Der exakte Wert steht im
-Feedback-Text.
+`result.json` verlangt ganze Zahlen, es wird gerundet. Gerundet wird also, was
+im Gradebook, im Commit-Status und in `scores.json` steht — 6.44 Punkte
+erscheinen dort als 6.
+
+Der exakte Wert geht dabei nicht verloren. Er steht im Feedback-Text:
+
+```
+_Exakt: 6.44/7.00 Punkte — im Gradebook auf ganze Punkte gerundet._
+```
+
+**Nach Moodle geht der exakte Wert**, auf zwei Nachkommastellen. Der Übertrag
+liest ihn aus genau dieser Zeile, siehe [Moodle-Übertrag](moodle.md). Die Zeile
+ist damit eine Schnittstelle und kein blosser Hinweis — wer sie umformuliert,
+muss `moodle.exact_points` mitziehen.
 
 ## Startcode lint-sauber halten
 

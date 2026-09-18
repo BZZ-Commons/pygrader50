@@ -1,8 +1,10 @@
 import json
+import pathlib
 
 import pytest
 
-from pygrader50 import moodle
+from pygrader50 import moodle, render
+from pygrader50.env import Identity
 
 
 def submission(**overrides):
@@ -161,6 +163,230 @@ def test_dry_run_sends_nothing():
     )
 
     assert sent == 1 and calls == []
+
+
+# Wörtlich aus dem Release submit/2026-09-16T09-24-51Z-80d9e0c im Repo
+# m323-ix24-m323-lu03-a02-zinseszins-im24a-gesztelyif.
+LIVE_BODY = """### classroom50 autograde: 6/7
+
+_Exakt: 6.44/7.00 Punkte — im Gradebook auf ganze Punkte gerundet._
+
+## Unittests
+"""
+
+
+def test_exact_points_reads_the_line_a_real_release_carries():
+    assert moodle.exact_points(LIVE_BODY) == (6.44, 7)
+
+
+def test_exact_points_is_none_when_nothing_was_rounded():
+    """Keine Zeile heisst »die ganze Zahl ist exakt«, nicht »unbekannt«."""
+    assert moodle.exact_points('### classroom50 autograde: 8/8\n\n## Unittests\n') is None
+    assert moodle.exact_points('') is None
+    assert moodle.exact_points('_Exakt: kaputt/7.00 Punkte_') is None
+
+
+def test_exact_points_keeps_whole_values_whole():
+    """`9`, nicht `9.0` — sonst sähe jede Gegenprobe nach einer Änderung aus."""
+    points, maximum = moodle.exact_points('_Exakt: 9.00/9.00 Punkte_')
+
+    assert (points, maximum) == (9, 9)
+    assert isinstance(points, int) and isinstance(maximum, int)
+
+
+def test_the_exact_line_render_writes_is_the_one_moodle_reads():
+    """Round-Trip: wer den Wortlaut in render.py ändert, sieht es hier.
+
+    Die Zeile ist eine Schnittstelle zwischen den beiden Modulen — ohne diesen
+    Test bräche eine Umformulierung den Übertrag still, erst in Moodle.
+    """
+    identity = Identity(
+        classroom='m323-ix24', assignment='slug', assignment_type='individual',
+        owner='graphics80', submission_tag='submit/x', commit_url='https://x',
+        release_url='https://x', review_url='https://x',
+        workspace=pathlib.Path('.'), runner_temp=None,
+    )
+    sections = [
+        {'category': 'pytest', 'name': 'Unittests', 'points': 2, 'max': 2, 'feedback': []},
+        {'category': 'pylint', 'name': 'Linting', 'points': 4.44, 'max': 5, 'feedback': []},
+    ]
+
+    body = render.release_body(identity, sections, {'score': 6, 'max-score': 7})
+
+    assert moodle.exact_points(body) == (6.44, 7)
+
+
+def test_payload_carries_the_exact_points_when_they_are_known():
+    found = moodle.latest_submissions(scores(submission()))[0]
+
+    payload = moodle.build_payload(found, '', points=4.84, max_points=8)
+
+    assert (payload['points'], payload['max']) == (4.84, 8)
+
+
+def test_sync_sends_the_exact_value_from_the_release_text():
+    found = moodle.latest_submissions(scores(submission()))[0]
+    calls = []
+
+    moodle.sync(
+        [found], sender=lambda payload: calls.append(payload) or (True, 'ok'),
+        feedback_provider=lambda _: LIVE_BODY, state=moodle.State(),
+    )
+
+    assert calls[0]['points'] == 6.44
+
+
+def test_sync_falls_back_to_the_whole_number_without_a_release_text():
+    """Ein gescheiterter Body-Abruf liefert '' — dann geht die ganze Zahl raus."""
+    found = moodle.latest_submissions(scores(submission()))[0]
+    calls = []
+
+    moodle.sync(
+        [found], sender=lambda payload: calls.append(payload) or (True, 'ok'),
+        feedback_provider=lambda _: '', state=moodle.State(),
+    )
+
+    assert calls[0]['points'] == 5
+
+
+def test_a_run_without_a_release_text_stays_open_for_a_backfill():
+    """Die gerundete Zahl ging raus — das darf nicht als exakt gelten."""
+    found = moodle.latest_submissions(scores(submission()))[0]
+    state = moodle.State()
+
+    moodle.sync(
+        [found], sender=lambda payload: (True, 'ok'),
+        feedback_provider=lambda _: '', state=state,
+    )
+
+    assert state.is_current(found) is True, 'die Abgabe ist übertragen'
+    assert state.has_exact(found) is False, 'aber nicht exakt — ein Nachzug greift'
+
+
+def test_state_records_what_was_actually_sent():
+    found = moodle.latest_submissions(scores(submission()))[0]
+    state = moodle.State()
+
+    state.record(found, 6.44)
+
+    assert state.entries[found.key]['points'] == 6.44
+    assert state.entries[found.key]['score'] == 5, 'die ganze Zahl bleibt der Vergleichswert'
+    assert state.is_current(found) is True
+
+
+def test_an_old_entry_is_not_resent_by_a_normal_run():
+    """Der Nachtlauf darf vom Nachzug nichts mitbekommen."""
+    found = moodle.latest_submissions(scores(submission()))[0]
+    state = moodle.State(entries={found.key: {'submission': found.submission, 'score': 5}})
+    calls = []
+
+    sent, skipped, failed = moodle.sync(
+        [found], sender=lambda payload: calls.append(payload) or (True, 'ok'),
+        feedback_provider=lambda _: LIVE_BODY, state=state,
+    )
+
+    assert (sent, skipped, failed) == (0, 1, 0)
+    assert calls == []
+
+
+def test_backfill_sends_an_old_entry_whose_exact_value_differs():
+    found = moodle.latest_submissions(scores(submission()))[0]
+    state = moodle.State(entries={found.key: {'submission': found.submission, 'score': 5}})
+    calls = []
+
+    sent, _, _ = moodle.sync(
+        [found], sender=lambda payload: calls.append(payload) or (True, 'ok'),
+        feedback_provider=lambda _: LIVE_BODY, state=state, backfill=True,
+    )
+
+    assert sent == 1
+    assert calls[0]['points'] == 6.44
+    assert state.entries[found.key]['points'] == 6.44
+
+
+def test_backfill_only_notes_an_old_entry_that_does_not_change():
+    """Ein erneuter Versand desselben Werts überschriebe eine Handkorrektur."""
+    found = moodle.latest_submissions(scores(submission()))[0]
+    state = moodle.State(entries={found.key: {'submission': found.submission, 'score': 5}})
+    calls = []
+
+    sent, skipped, _ = moodle.sync(
+        [found], sender=lambda payload: calls.append(payload) or (True, 'ok'),
+        feedback_provider=lambda _: '### classroom50 autograde: 5/7\n', state=state,
+        backfill=True,
+    )
+
+    assert (sent, skipped) == (0, 1)
+    assert calls == []
+    assert state.entries[found.key]['points'] == 5
+
+
+def test_backfill_leaves_an_entry_whose_release_text_is_unreachable():
+    """Sonst gälte er als nachgezogen, obwohl nie ein exakter Wert gelesen wurde."""
+    found = moodle.latest_submissions(scores(submission()))[0]
+    entry = {'submission': found.submission, 'score': 5}
+    state = moodle.State(entries={found.key: entry})
+
+    sent, skipped, failed = moodle.sync(
+        [found], sender=lambda payload: (True, 'ok'),
+        feedback_provider=lambda _: '', state=state, backfill=True,
+    )
+
+    assert (sent, skipped, failed) == (0, 0, 1)
+    assert 'points' not in state.entries[found.key]
+
+
+def test_a_second_backfill_touches_nothing():
+    found = moodle.latest_submissions(scores(submission()))[0]
+    state = moodle.State(entries={found.key: {'submission': found.submission, 'score': 5}})
+    calls = []
+
+    def run():
+        return moodle.sync(
+            [found], sender=lambda payload: calls.append(payload) or (True, 'ok'),
+            feedback_provider=lambda _: LIVE_BODY, state=state, backfill=True,
+        )
+
+    run()
+    sent, skipped, failed = run()
+
+    assert (sent, skipped, failed) == (0, 1, 0)
+    assert len(calls) == 1
+
+
+def test_a_backfill_dry_run_leaves_the_state_alone():
+    """Sonst gälte ein Eintrag als nachgezogen, ohne dass Moodle ihn je sah."""
+    found = moodle.latest_submissions(scores(submission()))[0]
+    entry = {'submission': found.submission, 'score': 5}
+    state = moodle.State(entries={found.key: entry})
+
+    moodle.sync(
+        [found], sender=lambda payload: (True, 'ok'),
+        feedback_provider=lambda _: '### classroom50 autograde: 5/7\n', state=state,
+        backfill=True, dry_run=True,
+    )
+
+    assert 'points' not in state.entries[found.key]
+
+
+def test_backfill_refuses_to_run_without_the_release_text():
+    """Sonst gälte jede Abgabe als nachgezogen, ohne dass je ein exakter Wert kam."""
+    with pytest.raises(SystemExit) as exit_info:
+        moodle.parse_args(['--classroom', 'm323-ix24', '--backfill', '--no-feedback'])
+
+    assert exit_info.value.code == 2
+
+
+def test_a_dry_run_announces_the_exact_value(capsys):
+    """Ein Trockenlauf, der einen anderen Weg nimmt als der echte, beweist nichts."""
+    found = moodle.latest_submissions(scores(submission()))[0]
+
+    moodle.sync(
+        [found], sender=lambda payload: (True, 'ok'),
+        feedback_provider=lambda _: LIVE_BODY, state=moodle.State(), dry_run=True,
+    )
+
+    assert '6.44/7' in capsys.readouterr().out
 
 
 SUCCESS_XML = """<?xml version="1.0" encoding="UTF-8"?>

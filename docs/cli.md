@@ -120,8 +120,9 @@ Scope: 2 Classroom(s) — m323-ix24, m450-ix25 | echter Übertrag
 | `--assignment SLUG` | nur diese Aufgabe |
 | `--user LOGIN` | nur diesen GitHub-Login ¹ |
 | `--force` | auch Unverändertes erneut senden |
+| `--backfill` | Abgaben aus der Zeit vor dem exakten Übertrag nachziehen ² |
 | `--dry-run` | nur anzeigen, nichts senden; funktioniert ohne Zugangsdaten |
-| `--no-feedback` | ohne Feedback-Text (spart einen API-Aufruf pro Abgabe) |
+| `--no-feedback` | ohne Feedback-Text ³ |
 
 Das Zustandsfile ist immer `<CLASSROOM>/moodle-state.json` — es gibt keine
 Option dafür. Eine einzelne Datei direkt zu benennen geht bewusst nicht: sonst
@@ -131,6 +132,17 @@ ginge durch die Scope-Prüfung.
 ¹ Muss im Moodle-Kurs eingeschrieben sein. Der eigene Lehrer-Account ist es
 meist nicht — Moodle antwortet dann `No matching assignment found`, obwohl die
 Aktivität existiert.
+
+² Einmaliger Lauf nach der Umstellung auf den exakten Übertrag, von Hand
+angestossen. Gesendet wird nur, wo der exakte Wert von der übertragenen ganzen
+Zahl abweicht; alles andere bekommt bloss einen Zustandsvermerk. Der Lauf ist
+wiederholbar und fortsetzbar. Siehe [Moodle-Übertrag](moodle.md#nachzug).
+Schliesst `--no-feedback` aus (Exit 2): ohne den Release-Text gälte jede Abgabe
+als nachgezogen, ohne dass je ein exakter Wert gelesen wurde.
+
+³ Spart einen API-Aufruf pro Abgabe, **kostet aber die Genauigkeit**: ohne den
+Release-Text gibt es keinen exakten Punktestand, und es geht die gerundete
+ganze Zahl nach Moodle.
 
 ### Umgebung
 
