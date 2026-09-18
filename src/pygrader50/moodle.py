@@ -48,11 +48,13 @@ bereits exakt.
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import os
 import pathlib
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -77,6 +79,11 @@ STATE_FILENAME = 'moodle-state.json'
 EXACT_PATTERN = re.compile(
     r'_Exakt:\s*(?P<points>\d+(?:\.\d+)?)\s*/\s*(?P<max>\d+(?:\.\d+)?)\s*Punkte'
 )
+
+# So lange wird eine Drosselung ausgesessen. Darüber lohnt das Warten nicht:
+# die primäre Grenze gibt erst zur vollen Stunde wieder frei, und einen
+# Actions-Job so lange leer laufen zu lassen ist teurer als ein zweiter Lauf.
+MAX_THROTTLE_WAIT = 120
 
 
 @dataclass(frozen=True)
@@ -218,8 +225,38 @@ def latest_submissions(scores: dict, *, assignment: str | None = None,
     return found
 
 
-def release_feedback(submission: Submission, token: str | None) -> str:
-    """Den Markdown-Text des Releases holen — das Feedback, das pygrader50 schreibt."""
+class RateLimited(RuntimeError):
+    """GitHub drosselt; für diesen Lauf ist das Kontingent aufgebraucht."""
+
+
+def throttle_wait(error: urllib.error.HTTPError) -> int | None:
+    """Sekunden bis zum nächsten Versuch, oder `None` bei einem echten 403.
+
+    GitHub meldet beides mit demselben Statuscode: das aufgebrauchte Kontingent
+    und die fehlende Berechtigung. Unterscheiden lässt sich das nur an den
+    Kopfzeilen — die primäre Grenze setzt `X-RateLimit-Remaining: 0`, die
+    sekundäre schickt `Retry-After`.
+    """
+    if error.code not in (403, 429):
+        return None
+    retry_after = (error.headers.get('Retry-After') or '').strip()
+    if retry_after.isdigit():
+        return int(retry_after)
+    if (error.headers.get('X-RateLimit-Remaining') or '').strip() == '0':
+        reset = (error.headers.get('X-RateLimit-Reset') or '').strip()
+        if reset.isdigit():
+            return max(int(reset) - int(time.time()), 0)
+    return None
+
+
+def release_feedback(submission: Submission, token: str | None, *, attempts: int = 3) -> str:
+    """Den Markdown-Text des Releases holen — das Feedback, das pygrader50 schreibt.
+
+    Bei einer kurzen Drosselung wird gewartet und erneut versucht. Ist das
+    Kontingent ganz weg, fliegt `RateLimited`: ein Nachzug prüft tausende
+    Releases, und ohne diese Bremse rennt er in die Grenze und brennt den Rest
+    in Sekunden als »nicht abrufbar« ab.
+    """
     if not (submission.repository and submission.submission):
         return ''
     tag = urllib.parse.quote(submission.submission, safe='')
@@ -227,16 +264,29 @@ def release_feedback(submission: Submission, token: str | None) -> str:
     request = urllib.request.Request(url, headers={'Accept': 'application/vnd.github+json'})
     if token:
         request.add_header('Authorization', f'Bearer {token}')
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.load(response).get('body') or ''
-    # `OSError` statt der drei einzelnen Typen: `URLError` und `HTTPError` sind
-    # selbst OSError-Kinder, `TimeoutError` und `RemoteDisconnected` aber nicht
-    # — und über die tausenden Abrufe eines Nachzugs ist ein Aussetzer sicher.
-    # Der Feedback-Text ist Beiwerk; er darf nie einen Lauf abreissen.
-    except (OSError, ValueError) as exc:
-        warn(f'{submission.key}: Feedback-Text nicht abrufbar ({exc})')
-        return ''
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return json.load(response).get('body') or ''
+        except urllib.error.HTTPError as exc:
+            wait = throttle_wait(exc)
+            if wait is None:
+                warn(f'{submission.key}: Feedback-Text nicht abrufbar ({exc})')
+                return ''
+            if wait > MAX_THROTTLE_WAIT or attempt == attempts:
+                raise RateLimited(
+                    f'GitHub drosselt und gibt erst in {wait}s wieder frei'
+                ) from exc
+            info(f'GitHub drosselt — {wait}s warten (Versuch {attempt}/{attempts})')
+            time.sleep(wait)
+        # `OSError` statt der einzelnen Typen: `URLError` ist selbst ein
+        # OSError-Kind, `TimeoutError` und `RemoteDisconnected` aber nicht — und
+        # über die tausenden Abrufe eines Nachzugs ist ein Aussetzer sicher.
+        # Der Feedback-Text ist Beiwerk; er darf nie einen Lauf abreissen.
+        except (OSError, ValueError) as exc:
+            warn(f'{submission.key}: Feedback-Text nicht abrufbar ({exc})')
+            return ''
+    return ''
 
 
 def _plain(value: float):
@@ -354,7 +404,8 @@ def sync(  # pylint: disable=too-many-arguments,too-many-locals,too-many-branche
 ) -> tuple[int, int, int]:
     """Überträgt die Abgaben; gibt (übertragen, übersprungen, fehlgeschlagen) zurück."""
     sent = skipped = failed = 0
-    for submission in submissions:
+    reasons: collections.Counter = collections.Counter()
+    for index, submission in enumerate(submissions):
         label = f'{submission.assignment} / {submission.owner}'
         current = state.is_current(submission)
         # Nachzug: Einträge aus der Zeit vor dem exakten Übertrag tragen im
@@ -367,12 +418,27 @@ def sync(  # pylint: disable=too-many-arguments,too-many-locals,too-many-branche
         if not submission.owner:
             warn(f'{submission.assignment}: Abgabe ohne Owner übersprungen')
             failed += 1
+            reasons['Abgabe ohne Owner'] += 1
             continue
 
         # Auch im Trockenlauf: sonst nähme er einen anderen Weg als der echte
         # und zeigte weiter die gerundete Zahl — er bewiese gerade das nicht,
         # wofür er gefahren wird.
-        body = feedback_provider(submission)
+        try:
+            body = feedback_provider(submission)
+        except RateLimited as exc:
+            # Weiterlaufen hiesse, den Rest in Sekunden als »nicht abrufbar«
+            # abzubrennen — genau das ist am 18.09.2026 passiert: 1310 Abgaben
+            # in 65 Sekunden. Sie bleiben ohne `points` und damit offen; ein
+            # späterer Lauf holt sie nach.
+            remaining = len(submissions) - index
+            console_error(
+                f'{exc} — {remaining} Abgaben nicht geprüft. Später erneut laufen lassen; '
+                'was schon nachgezogen ist, wird übersprungen.'
+            )
+            failed += remaining
+            reasons['GitHub-Kontingent aufgebraucht'] += remaining
+            break
 
         # Beim Nachzug heisst ein leerer Release-Text nicht »nichts zu runden«,
         # sondern »nicht abrufbar«. Ihn wie einen gelesenen zu behandeln,
@@ -381,6 +447,7 @@ def sync(  # pylint: disable=too-many-arguments,too-many-locals,too-many-branche
         if catching_up and not body:
             warn(f'{label}: Release-Text nicht abrufbar, bleibt für den nächsten Nachzug liegen')
             failed += 1
+            reasons['Release-Text nicht abrufbar'] += 1
             continue
 
         points, maximum = exact_points(body) or (submission.score, submission.max_score)
@@ -409,8 +476,24 @@ def sync(  # pylint: disable=too-many-arguments,too-many-locals,too-many-branche
             console_ok(f'✅ {label}: {points}/{maximum}')
         else:
             failed += 1
+            reasons[message.splitlines()[0] if message else 'ohne Meldung'] += 1
             fail(f'❌ {label}: {message}')
+    _report_reasons(reasons)
     return sent, skipped, failed
+
+
+def _report_reasons(reasons: collections.Counter) -> None:
+    """Die Fehlschläge nach Ursache zusammenfassen.
+
+    Bei tausenden Abgaben ist die Einzelzeile nicht mehr lesbar — und der
+    Unterschied zwischen »Moodle hat abgelehnt« und »GitHub war nicht
+    erreichbar« entscheidet, was als Nächstes zu tun ist.
+    """
+    if not reasons:
+        return
+    info('Fehlgeschlagen nach Ursache:')
+    for reason, count in reasons.most_common():
+        info(f'  {count:>5} × {reason}')
 
 
 class ScopeError(RuntimeError):

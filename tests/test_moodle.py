@@ -1,5 +1,7 @@
 import json
 import pathlib
+import time
+import urllib.error
 
 import pytest
 
@@ -367,6 +369,54 @@ def test_a_backfill_dry_run_leaves_the_state_alone():
     )
 
     assert 'points' not in state.entries[found.key]
+
+
+def http_error(code, headers):
+    """Eine HTTPError-Attrappe mit Kopfzeilen, wie GitHub sie schickt."""
+    import email.message
+    message = email.message.Message()
+    for key, value in headers.items():
+        message[key] = value
+    return urllib.error.HTTPError('https://api.github.com', code, 'Forbidden', message, None)
+
+
+def test_a_plain_403_is_not_a_throttle():
+    """Fehlende Berechtigung und leeres Kontingent teilen sich den Statuscode."""
+    assert moodle.throttle_wait(http_error(403, {})) is None
+    assert moodle.throttle_wait(http_error(404, {'Retry-After': '30'})) is None
+
+
+def test_the_secondary_limit_says_how_long_to_wait():
+    assert moodle.throttle_wait(http_error(403, {'Retry-After': '45'})) == 45
+    assert moodle.throttle_wait(http_error(429, {'Retry-After': '10'})) == 10
+
+
+def test_the_primary_limit_is_read_from_the_reset_header():
+    reset = int(time.time()) + 300
+
+    wait = moodle.throttle_wait(
+        http_error(403, {'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': str(reset)})
+    )
+
+    assert 290 <= wait <= 300
+
+
+def test_a_spent_quota_stops_the_run_instead_of_burning_the_rest():
+    """Am 18.09.2026 rannte der Nachzug in die Grenze und brannte 1310 Abgaben ab."""
+    found = [moodle.latest_submissions(scores(submission(), slug=f'slug{i}'))[0]
+             for i in range(5)]
+    state = moodle.State()
+
+    def provider(_):
+        raise moodle.RateLimited('GitHub drosselt und gibt erst in 900s wieder frei')
+
+    sent, skipped, failed = moodle.sync(
+        found, sender=lambda payload: (True, 'ok'),
+        feedback_provider=provider, state=state,
+    )
+
+    assert (sent, skipped, failed) == (0, 0, 5), 'alle als offen gemeldet, keiner angefasst'
+    assert state.entries == {}
 
 
 def test_backfill_refuses_to_run_without_the_release_text():
