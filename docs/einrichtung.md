@@ -66,10 +66,21 @@ gh teacher autograder set-default <ORG> <CLASSROOM> --from bootstrap/autograder.
 Das legt `<CLASSROOM>/autograder.py` im Config-Repo ab; `publish-pages` stellt
 die Datei auf die Pages-Site, wo `runner.py` sie bei jeder Abgabe holt.
 
+> **`--from` ist Pflicht.** Ohne die Option liefert `gh teacher` seinen eigenen
+> Diagnose-Stub aus. Der bewertet nicht, sondern schreibt einen Vacuous Pass
+> `0/0` — und zwar für **jede** Abgabe, bis es jemand merkt. Nach dem
+> Pages-Deploy deshalb die ausgelieferte Datei gegen die eigene vergleichen,
+> nicht nur die Versionszeile ansehen:
+>
+> ```bash
+> curl -sS https://<ORG>.github.io/classroom50/<CLASSROOM>/autograder.py \
+>   | diff - bootstrap/autograder.py && echo "byteidentisch"
+> ```
+
 Die gepinnte Version steht in `bootstrap/autograder.py`:
 
 ```python
-VERSION = 'v2.4.0'
+VERSION = 'v2.6.0'
 ```
 
 Ein Upgrade heisst später: Tag hochziehen, Zeile ändern, `set-default` erneut
