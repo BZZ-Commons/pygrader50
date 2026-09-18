@@ -104,7 +104,7 @@ jobs:
       # vorhandenen Stand weiter — alte Punkte sind besser als gar keine.
       - name: Punkte einsammeln
         if: github.event_name == 'schedule'
-        timeout-minutes: 20
+        timeout-minutes: 60
         env:
           GH_TOKEN: ${{ secrets.CLASSROOM50_SERVICE_TOKEN }}
           REPO: ${{ github.repository }}
